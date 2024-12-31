@@ -29,9 +29,7 @@ const metricsRows = computed(() => {
 });
 
 onMounted(async () => {
-  const metricsStream = new EventSource(
-    "http://localhost:3000/api/metrics-stream"
-  );
+  const metricsStream = new EventSource("/api/metrics-stream");
 
   metricsStream.onmessage = (event) => {
     metrics.value = JSON.parse(event.data) as Metrics[];
