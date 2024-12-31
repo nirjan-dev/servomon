@@ -5,21 +5,28 @@
         <h1>Server Metrics</h1>
       </template>
 
-      <ul>
-        <li v-for="metric in metrics">
-          <pre>
-            <code>
-              {{ metric }}
-            </code>
-          </pre>
-        </li>
-      </ul>
+      <UTable :rows="metricsRows" />
     </UCard>
   </UContainer>
 </template>
 
 <script setup lang="ts">
-const metrics = ref([]);
+import type { Metrics } from "../shared/types";
+
+const metrics = ref<Metrics[]>([]);
+
+const metricsRows = computed(() => {
+  return metrics.value.map((metricsItem) => {
+    return {
+      time: new Date(metricsItem.timestamp).toLocaleTimeString(),
+      "Memory Total": metricsItem.memory.total,
+
+      "Memory Free": metricsItem.memory.free,
+
+      "Memory used %": metricsItem.memory.usedPercentage,
+    };
+  });
+});
 
 onMounted(async () => {
   const metricsStream = new EventSource(
@@ -27,7 +34,7 @@ onMounted(async () => {
   );
 
   metricsStream.onmessage = (event) => {
-    metrics.value = JSON.parse(event.data);
+    metrics.value = JSON.parse(event.data) as Metrics[];
   };
 });
 </script>

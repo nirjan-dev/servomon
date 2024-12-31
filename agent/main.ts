@@ -42,8 +42,6 @@ function getMemoryStats(): MemoryInfo {
     usedPercentage: `${Math.round((used / total) * 100)}%`,
   };
 
-  console.log(memoryStats);
-
   return memoryStats;
 }
 
