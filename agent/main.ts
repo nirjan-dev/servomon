@@ -1,36 +1,6 @@
-interface ProcessInfo {
-  app: string;
-  pid: number;
-  cpuPercent: string;
-}
+import { Metrics } from "../shared/types.ts";
 
-interface DiskInfo {
-  device: string;
-  mountPoint: string;
-  total: string;
-  free: string;
-  used: string;
-  usedPercentage: string;
-}
-
-interface metrics {
-  timestamp: string;
-  memory: {
-    total: string;
-    free: string;
-    used: string;
-    usedPercentage: string;
-  };
-  cpu: {
-    cores: number;
-    used: string;
-    available: string;
-  };
-  processes: ProcessInfo[];
-  disk: DiskInfo[];
-}
-
-function getMetrics(): metrics {
+function getMetrics(): Metrics {
   return {
     timestamp: new Date().toLocaleString(),
     memory: {

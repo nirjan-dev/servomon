@@ -1,15 +1,22 @@
-export default defineEventHandler(async (event) => {
-  const metrics = await readBody(event);
+import { Metrics } from "../../../shared/types";
 
-  if (!metrics) {
+import { metricsSchema } from "~/shared/schemas.zod";
+
+export default defineEventHandler(async (event) => {
+  const metricsData = await readValidatedBody(event, (body) =>
+    metricsSchema.safeParse(body)
+  );
+
+  if (!metricsData.success) {
     throw createError({
       statusCode: 400,
-      statusMessage: "No metrics provided",
+      statusMessage: "Invalid metrics data",
+      data: metricsData.error.issues,
     });
   }
 
   try {
-    await storeMetrics(metrics);
+    await storeMetrics(metricsData.data);
   } catch (error) {
     throw error;
   }
@@ -20,7 +27,7 @@ export default defineEventHandler(async (event) => {
   };
 });
 
-async function storeMetrics(metrics: any) {
+async function storeMetrics(metrics: Metrics) {
   try {
     await useStorage("metrics").setItem(metrics.timestamp, metrics);
     return true;
