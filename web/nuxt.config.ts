@@ -11,7 +11,8 @@ export default defineNuxtConfig({
       tasks: true,
     },
     scheduledTasks: {
-      "* * * * *": ["metrics:cleanup", "metrics:healthcheck"],
+      "* * * * *": ["metrics:healthcheck"],
+      "*/2 * * * *": ["metrics:cleanup"],
     },
   },
   modules: ["@nuxt/ui"],
@@ -20,6 +21,7 @@ export default defineNuxtConfig({
     discordWebhookUrl: "",
     public: {
       enableDiscordAlerts: false,
+      metricsToCleanUp: 20,
     },
   },
 });

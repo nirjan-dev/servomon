@@ -14,7 +14,7 @@ export interface DiskInfo {
 }
 
 export interface Metrics {
-  timestamp: string;
+  timestamp: number;
   memory: {
     total: string;
     free: string;

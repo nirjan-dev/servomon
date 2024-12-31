@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
   return {
     statusCode: 200,
     statusMessage: "OK",
+    count: metricsKeys.length,
     metrics,
   };
 });

@@ -1,9 +1,35 @@
 import "@std/dotenv/load";
 import { Metrics } from "../shared/types.ts";
 
+const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
+const SERVER_URL = Deno.env.get("SERVER_URL");
+const REQUESTS_PER_MINUTE_UNIT =
+  Number(Deno.env.get("REQUESTS_PER_MINUTE_UNIT")) ?? 5;
+const MINUTE_UNIT = Number(Deno.env.get("MINUTE_UNIT"));
+
+const requestIntervalMilliSeconds = getRequestIntervalMilliSeconds(
+  REQUESTS_PER_MINUTE_UNIT,
+  MINUTE_UNIT
+);
+
+function getRequestIntervalMilliSeconds(
+  requestsPerMinuteUnit: number,
+  minuteUnit: number
+) {
+  const totalMilliSeconds = 1000 * 60 * minuteUnit;
+  return totalMilliSeconds / requestsPerMinuteUnit;
+}
+
+console.log(`REQUEST interval: ${requestIntervalMilliSeconds}`);
+console.log(
+  `will send ${REQUESTS_PER_MINUTE_UNIT} requests every ${MINUTE_UNIT} minutes`
+);
+console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
+console.log(`SERVER_URL: ${SERVER_URL}`);
+
 function getMetrics(): Metrics {
   return {
-    timestamp: new Date().toLocaleString(),
+    timestamp: Date.now(),
     memory: {
       total: "1GB",
       free: "500MB",
@@ -49,13 +75,6 @@ function getMetrics(): Metrics {
 }
 
 // setup a timer to update the metrics every 5 seconds and send them to the web server
-const REQUEST_INTERVAL_MS = Number(Deno.env.get("REQUEST_INTERVAL_MS")) || 5000;
-const SEND_REQUESTS = Boolean(Deno.env.get("SEND_REQUESTS")) || false;
-const SERVER_URL = Deno.env.get("SERVER_URL");
-
-console.log(`REQUEST_INTERVAL_MS: ${REQUEST_INTERVAL_MS}`);
-console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
-console.log(`SERVER_URL: ${SERVER_URL}`);
 
 setInterval(async () => {
   if (!SEND_REQUESTS) {
@@ -79,7 +98,7 @@ setInterval(async () => {
   } catch (error) {
     console.error(error);
   }
-}, REQUEST_INTERVAL_MS);
+}, requestIntervalMilliSeconds);
 
 // start a local web server with a handler
 function handler(_req: Request): Response {

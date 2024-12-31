@@ -17,7 +17,7 @@ export const diskInfoSchema = z.object({
 });
 
 export const metricsSchema = z.object({
-  timestamp: z.string(),
+  timestamp: z.number(),
   memory: z.object({
     total: z.string(),
     free: z.string(),
