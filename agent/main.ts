@@ -1,3 +1,4 @@
+import "@std/dotenv/load";
 import { Metrics } from "../shared/types.ts";
 
 function getMetrics(): Metrics {
@@ -47,17 +48,28 @@ function getMetrics(): Metrics {
   };
 }
 
-const ENABLED = false;
-
 // setup a timer to update the metrics every 5 seconds and send them to the web server
-setInterval(() => {
-  if (!ENABLED) return;
+const REQUEST_INTERVAL_MS = Number(Deno.env.get("REQUEST_INTERVAL_MS")) || 5000;
+const SEND_REQUESTS = Boolean(Deno.env.get("SEND_REQUESTS")) || false;
+const SERVER_URL = Deno.env.get("SERVER_URL");
+
+console.log(`REQUEST_INTERVAL_MS: ${REQUEST_INTERVAL_MS}`);
+console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
+console.log(`SERVER_URL: ${SERVER_URL}`);
+
+setInterval(async () => {
+  if (!SEND_REQUESTS) {
+    return;
+  }
+
+  if (!SERVER_URL) {
+    throw new Error("No server URL provided");
+  }
 
   const metrics = getMetrics();
 
-  console.log("sending metrics to server");
   try {
-    fetch("http://localhost:3000/api/metrics", {
+    await fetch(`${SERVER_URL}/api/metrics`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -67,7 +79,7 @@ setInterval(() => {
   } catch (error) {
     console.error(error);
   }
-}, 2000);
+}, REQUEST_INTERVAL_MS);
 
 // start a local web server with a handler
 function handler(_req: Request): Response {
