@@ -3,7 +3,9 @@ export default defineEventHandler(async (event) => {
   let metrics;
 
   try {
-    metricsKeys = await useStorage("metrics").getKeys();
+    metricsKeys = await useStorage("metrics")
+      .getKeys()
+      .then((keys) => keys.sort((a, b) => Number(b) - Number(a)));
 
     metrics = await Promise.all(
       metricsKeys.map(async (metricKey) => {

@@ -1,5 +1,5 @@
 import "@std/dotenv/load";
-import { Metrics } from "../shared/types.ts";
+import { Metrics, MemoryInfo } from "../shared/types.ts";
 
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
 const SERVER_URL = Deno.env.get("SERVER_URL");
@@ -27,15 +27,30 @@ console.log(
 console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
 console.log(`SERVER_URL: ${SERVER_URL}`);
 
+function getMemoryStats(): MemoryInfo {
+  const { free, total } = Deno.systemMemoryInfo();
+  const used = total - free;
+
+  function formatMemory(memoryInBytes: number) {
+    return `${Math.round(memoryInBytes / 1024 / 1024 / 1024)} GBs`;
+  }
+
+  const memoryStats = {
+    free: formatMemory(free),
+    total: formatMemory(total),
+    used: formatMemory(used),
+    usedPercentage: `${Math.round((used / total) * 100)}%`,
+  };
+
+  console.log(memoryStats);
+
+  return memoryStats;
+}
+
 function getMetrics(): Metrics {
   return {
     timestamp: Date.now(),
-    memory: {
-      total: "1GB",
-      free: "500MB",
-      used: "500MB",
-      usedPercentage: "50%",
-    },
+    memory: getMemoryStats(),
     cpu: {
       cores: 4,
       used: "50%",

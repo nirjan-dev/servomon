@@ -13,19 +13,23 @@ export interface DiskInfo {
   usedPercentage: string;
 }
 
+export interface MemoryInfo {
+  total: string;
+  free: string;
+  used: string;
+  usedPercentage: string;
+}
+
+export interface CpuInfo {
+  cores: number;
+  used: string;
+  available: string;
+}
+
 export interface Metrics {
   timestamp: number;
-  memory: {
-    total: string;
-    free: string;
-    used: string;
-    usedPercentage: string;
-  };
-  cpu: {
-    cores: number;
-    used: string;
-    available: string;
-  };
+  memory: MemoryInfo;
+  cpu: CpuInfo;
   processes: ProcessInfo[];
   disk: DiskInfo[];
 }
