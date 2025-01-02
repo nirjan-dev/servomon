@@ -1,10 +1,12 @@
 export default defineTask({
   meta: {
-    name: "metrics:send-alert",
+    name: "server:send-alert",
     description: "Send alert when no metrics are available",
   },
-  async run() {
-    await sendDiscordAlert("No metrics available, server is probably down");
+  async run({ payload: { message } }) {
+    let alertMessage: string = (message as string) ?? "alert message not sent";
+    console.log("sending alert with message: ", alertMessage);
+    await sendDiscordAlert(alertMessage);
     return {};
   },
 });
