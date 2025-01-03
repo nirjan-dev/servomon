@@ -21,7 +21,6 @@ export default defineNuxtConfig({
     discordWebhookUrl: "",
     public: {
       enableDiscordAlerts: false,
-      metricsToCleanUp: 20,
     },
   },
 });

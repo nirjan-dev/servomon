@@ -1,3 +1,5 @@
+const MIN_METRICS_TO_KEEP = 5;
+
 export default defineTask({
   meta: {
     name: "metrics:cleanup",
@@ -6,18 +8,14 @@ export default defineTask({
   async run() {
     console.log("Cleaning up old metrics");
 
-    const {
-      public: { metricsToCleanUp },
-    } = useRuntimeConfig();
-
     const metricsKeys = await useStorage("metrics").getKeys();
 
-    if (metricsKeys.length === 0) {
-      console.log("No metrics to clean up");
+    if (metricsKeys.length <= MIN_METRICS_TO_KEEP) {
+      console.log("Not enough metrics to clean up");
       return {};
     }
 
-    const cleanupCount = Math.min(metricsKeys.length, metricsToCleanUp);
+    const cleanupCount = metricsKeys.length - MIN_METRICS_TO_KEEP;
 
     const metricsKeysToDelete = metricsKeys.splice(0, cleanupCount);
 
