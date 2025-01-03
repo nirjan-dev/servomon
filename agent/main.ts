@@ -1,5 +1,5 @@
 import "@std/dotenv/load";
-import { Metrics, MemoryInfo } from "../shared/types.ts";
+import { Metrics, MemoryInfo, BatteryInfo } from "../shared/types.ts";
 
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
 const SERVER_URL = Deno.env.get("SERVER_URL");
@@ -45,10 +45,25 @@ function getMemoryStats(): MemoryInfo {
   return memoryStats;
 }
 
-function getMetrics(): Metrics {
+async function getBatteryStats(): Promise<BatteryInfo> {
+  const batteryPath = `/sys/class/power_supply/BAT0`;
+
+  const [batteryState, batteryCharge] = await Promise.all([
+    Deno.readTextFile(`${batteryPath}/status`),
+    Deno.readTextFile(`${batteryPath}/capacity`),
+  ]);
+
+  return {
+    state: batteryState.trimEnd(),
+    charge: batteryCharge.trimEnd(),
+  };
+}
+
+async function getMetrics(): Promise<Metrics> {
   return {
     timestamp: Date.now(),
     memory: getMemoryStats(),
+    battery: await getBatteryStats(),
     cpu: {
       cores: 4,
       used: "50%",
@@ -98,7 +113,7 @@ setInterval(async () => {
     throw new Error("No server URL provided");
   }
 
-  const metrics = getMetrics();
+  const metrics = await getMetrics();
 
   try {
     await fetch(`${SERVER_URL}/api/metrics`, {

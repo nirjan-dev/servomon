@@ -16,19 +16,29 @@ export const diskInfoSchema = z.object({
   usedPercentage: z.string(),
 });
 
+export const memoryInfoSchema = z.object({
+  total: z.string(),
+  free: z.string(),
+  used: z.string(),
+  usedPercentage: z.string(),
+});
+
+export const cpuInfoSchema = z.object({
+  cores: z.number(),
+  used: z.string(),
+  available: z.string(),
+});
+
+export const batteryInfoSchema = z.object({
+  state: z.string(),
+  charge: z.string(),
+});
+
 export const metricsSchema = z.object({
   timestamp: z.number(),
-  memory: z.object({
-    total: z.string(),
-    free: z.string(),
-    used: z.string(),
-    usedPercentage: z.string(),
-  }),
-  cpu: z.object({
-    cores: z.number(),
-    used: z.string(),
-    available: z.string(),
-  }),
+  memory: memoryInfoSchema,
+  cpu: cpuInfoSchema,
   processes: z.array(processInfoSchema),
   disk: z.array(diskInfoSchema),
+  battery: batteryInfoSchema,
 });

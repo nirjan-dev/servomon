@@ -26,10 +26,16 @@ export interface CpuInfo {
   available: string;
 }
 
+export interface BatteryInfo {
+  state: string;
+  charge: string;
+}
+
 export interface Metrics {
   timestamp: number;
   memory: MemoryInfo;
   cpu: CpuInfo;
   processes: ProcessInfo[];
   disk: DiskInfo[];
+  battery: BatteryInfo;
 }
