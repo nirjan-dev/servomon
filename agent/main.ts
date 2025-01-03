@@ -46,16 +46,42 @@ function getMemoryStats(): MemoryInfo {
 }
 
 async function getBatteryStats(): Promise<BatteryInfo> {
-  const batteryPath = `/sys/class/power_supply/BAT0`;
+  const batteryOutputLines = await new Deno.Command("scripts/battery.sh")
+    .output()
+    .then((output) => new TextDecoder().decode(output.stdout).split("\n"));
+  /**
+   *
+   * @param lines array of lines in string format
+   * @returns parsed object
+   *
+   * @example parsedLinesToValues(
+   *  ["   state:   fully-charged  ",
+   *   "   percentage:     100%"
+   *  ]
+   * ) will return {
+   *  state: "fully-charged",
+   *  percentage: "100%"
+   * }
+   */
+  function parseLinesToValues(lines: string[]): { [key: string]: string } {
+    const parsedData: {
+      [key: string]: string;
+    } = {};
 
-  const [batteryState, batteryCharge] = await Promise.all([
-    Deno.readTextFile(`${batteryPath}/status`),
-    Deno.readTextFile(`${batteryPath}/capacity`),
-  ]);
+    lines.forEach((line) => {
+      if (line.trim()) {
+        const [key, value] = line.split(":").map((part) => part.trim());
+        parsedData[key] = value;
+      }
+    });
 
+    return parsedData;
+  }
+
+  const { state, percentage } = parseLinesToValues(batteryOutputLines);
   return {
-    state: batteryState.trimEnd(),
-    charge: batteryCharge.trimEnd(),
+    state: state,
+    charge: percentage,
   };
 }
 
@@ -114,7 +140,6 @@ setInterval(async () => {
   }
 
   const metrics = await getMetrics();
-
   try {
     await fetch(`${SERVER_URL}/api/metrics`, {
       method: "POST",
