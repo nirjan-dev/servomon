@@ -1,6 +1,6 @@
 import "@std/dotenv/load";
 import { Metrics, MemoryInfo, BatteryInfo } from "../shared/types.ts";
-import { battery } from "systeminformation";
+import { battery, mem } from "systeminformation";
 
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
 const SERVER_URL = Deno.env.get("SERVER_URL");
@@ -28,19 +28,18 @@ console.log(
 console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
 console.log(`SERVER_URL: ${SERVER_URL}`);
 
-function getMemoryStats(): MemoryInfo {
-  const { free, total } = Deno.systemMemoryInfo();
-  const used = total - free;
+async function getMemoryStats(): Promise<MemoryInfo> {
+  const { total, available, used } = await mem();
 
   function formatMemory(memoryInBytes: number) {
-    return `${Math.round(memoryInBytes / 1024 / 1024 / 1024)} GBs`;
+    return `${Math.ceil(memoryInBytes / 1024 / 1024 / 1024)} GBs`;
   }
 
   const memoryStats = {
-    free: formatMemory(free),
+    free: formatMemory(available),
     total: formatMemory(total),
     used: formatMemory(used),
-    usedPercentage: `${Math.round((used / total) * 100)}%`,
+    usedPercentage: `${Math.ceil((used / total) * 100)}%`,
   };
 
   return memoryStats;
@@ -57,7 +56,7 @@ async function getBatteryStats(): Promise<BatteryInfo> {
 async function getMetrics(): Promise<Metrics> {
   return {
     timestamp: Date.now(),
-    memory: getMemoryStats(),
+    memory: await getMemoryStats(),
     battery: await getBatteryStats(),
     cpu: {
       cores: 4,
