@@ -25,8 +25,6 @@ const metricsRows = computed(() => {
 
       "Memory used %": metricsItem.memory.usedPercentage,
 
-      "Battery state": metricsItem.battery.state,
-
       "Battery charge": metricsItem.battery.charge,
     };
   });

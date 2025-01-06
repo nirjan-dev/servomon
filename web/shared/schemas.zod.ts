@@ -30,7 +30,6 @@ export const cpuInfoSchema = z.object({
 });
 
 export const batteryInfoSchema = z.object({
-  state: z.string(),
   charge: z.string(),
 });
 

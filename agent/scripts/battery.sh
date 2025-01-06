@@ -1,2 +1,0 @@
-#!/bin/bash
-upower -i $(upower -e | grep 'BAT') | grep --color=never -E "state|percentage"

@@ -27,7 +27,6 @@ export interface CpuInfo {
 }
 
 export interface BatteryInfo {
-  state: string;
   charge: string;
 }
 

@@ -1,5 +1,6 @@
 import "@std/dotenv/load";
 import { Metrics, MemoryInfo, BatteryInfo } from "../shared/types.ts";
+import { battery } from "systeminformation";
 
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
 const SERVER_URL = Deno.env.get("SERVER_URL");
@@ -46,42 +47,10 @@ function getMemoryStats(): MemoryInfo {
 }
 
 async function getBatteryStats(): Promise<BatteryInfo> {
-  const batteryOutputLines = await new Deno.Command("scripts/battery.sh")
-    .output()
-    .then((output) => new TextDecoder().decode(output.stdout).split("\n"));
-  /**
-   *
-   * @param lines array of lines in string format
-   * @returns parsed object
-   *
-   * @example parsedLinesToValues(
-   *  ["   state:   fully-charged  ",
-   *   "   percentage:     100%"
-   *  ]
-   * ) will return {
-   *  state: "fully-charged",
-   *  percentage: "100%"
-   * }
-   */
-  function parseLinesToValues(lines: string[]): { [key: string]: string } {
-    const parsedData: {
-      [key: string]: string;
-    } = {};
+  const { percent } = await battery();
 
-    lines.forEach((line) => {
-      if (line.trim()) {
-        const [key, value] = line.split(":").map((part) => part.trim());
-        parsedData[key] = value;
-      }
-    });
-
-    return parsedData;
-  }
-
-  const { state, percentage } = parseLinesToValues(batteryOutputLines);
   return {
-    state: state,
-    charge: percentage,
+    charge: percent + "%",
   };
 }
 
