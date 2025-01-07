@@ -1,6 +1,20 @@
 import "@std/dotenv/load";
-import { Metrics, MemoryInfo, BatteryInfo } from "../shared/types.ts";
-import { battery, mem } from "systeminformation";
+import {
+  Metrics,
+  MemoryInfo,
+  BatteryInfo,
+  CpuInfo,
+  ProcessInfo,
+  DiskInfo,
+} from "../shared/types.ts";
+import {
+  battery,
+  cpu,
+  currentLoad,
+  fsSize,
+  mem,
+  processes,
+} from "systeminformation";
 
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
 const SERVER_URL = Deno.env.get("SERVER_URL");
@@ -53,46 +67,74 @@ async function getBatteryStats(): Promise<BatteryInfo> {
   };
 }
 
+async function getCPUStats(): Promise<CpuInfo> {
+  const { avgLoad, cpus } = await currentLoad();
+
+  const used = avgLoad * 100;
+  const available = 100 - used;
+  const cores = cpus.length;
+
+  return {
+    available: `${available}%`,
+    cores,
+    used: `${used}%`,
+  };
+}
+
+async function getProcessStats(): Promise<ProcessInfo[]> {
+  const processStatsRaw = await processes();
+  const { cores } = await cpu();
+
+  const topProcesses = processStatsRaw.list
+    .sort((a, b) => b.cpu - a.cpu)
+    .splice(0, Math.min(10, processStatsRaw.list.length));
+
+  const processStats: ProcessInfo[] = topProcesses.map((process) => {
+    return {
+      app: process.name,
+      cpuPercent: `${Math.ceil((process.cpu * 100) / cores)}%`,
+      pid: process.pid,
+    };
+  });
+
+  return processStats;
+}
+
+async function getDiskStats(): Promise<DiskInfo[]> {
+  const rawDiskStats = await fsSize();
+
+  const onlyPhysicalRawDiskStats = rawDiskStats.filter((disk) =>
+    disk.fs.startsWith("/dev")
+  );
+
+  function formatDiskSize(size: number) {
+    return `${Math.ceil(size / 1024 / 1024 / 1024)} GBs`;
+  }
+
+  const diskStats: DiskInfo[] = onlyPhysicalRawDiskStats.map((disk) => {
+    return {
+      device: disk.fs,
+      mountPoint: disk.mount,
+      free: formatDiskSize(disk.available),
+      total: formatDiskSize(disk.size),
+      used: formatDiskSize(disk.used),
+      usedPercentage: `${disk.use}%`,
+    };
+  });
+
+  return diskStats;
+}
+
 async function getMetrics(): Promise<Metrics> {
   return {
     timestamp: Date.now(),
     memory: await getMemoryStats(),
     battery: await getBatteryStats(),
-    cpu: {
-      cores: 4,
-      used: "50%",
-      available: "50%",
-    },
-    processes: [
-      {
-        app: "app1",
-        pid: 1234,
-        cpuPercent: "50%",
-      },
-      {
-        app: "app2",
-        pid: 5678,
-        cpuPercent: "20%",
-      },
-    ],
-    disk: [
-      {
-        device: "/dev/sda1",
-        mountPoint: "/",
-        total: "10GB",
-        free: "5GB",
-        used: "5GB",
-        usedPercentage: "50%",
-      },
-      {
-        device: "/dev/sda2",
-        mountPoint: "/home",
-        total: "20GB",
-        free: "10GB",
-        used: "10GB",
-        usedPercentage: "50%",
-      },
-    ],
+
+    cpu: await getCPUStats(),
+
+    processes: await getProcessStats(),
+    disk: await getDiskStats(),
   };
 }
 
@@ -122,8 +164,8 @@ setInterval(async () => {
 }, requestIntervalMilliSeconds);
 
 // start a local web server with a handler
-function handler(_req: Request): Response {
-  const metrics = getMetrics();
+async function handler(_req: Request): Promise<Response> {
+  const metrics = await getMetrics();
 
   return new Response(JSON.stringify(metrics), {
     headers: {
