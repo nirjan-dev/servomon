@@ -15,6 +15,7 @@ import {
   mem,
   processes,
 } from "systeminformation";
+import { WebsocketClient } from "../shared/lib/WebsocketClient.ts";
 
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
 const SERVER_URL = Deno.env.get("SERVER_URL");
@@ -173,6 +174,12 @@ async function handler(_req: Request): Promise<Response> {
     },
   });
 }
+
+const ws = new WebsocketClient({
+  url: `${SERVER_URL}/api/ws?type=server`,
+});
+
+ws.connect();
 
 Deno.serve(
   {

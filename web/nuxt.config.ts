@@ -9,6 +9,7 @@ export default defineNuxtConfig({
     },
     experimental: {
       tasks: true,
+      websocket: true,
     },
     scheduledTasks: {
       "* * * * *": ["metrics:healthcheck"],

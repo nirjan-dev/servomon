@@ -9,6 +9,8 @@
       <span> Battery: {{ batteryCharge }}</span>
     </h1>
 
+    <UButton @click="sendMessage">Send command</UButton>
+
     <div class="flex flex-wrap gap-2">
       <UCard>
         <template #header>
@@ -43,8 +45,10 @@
 
 <script setup lang="ts">
 import type { Metrics } from "../shared/types";
-
+import { WebsocketClient } from "../shared/lib/WebsocketClient";
 const metrics = ref<Metrics[]>([]);
+
+let ws: WebsocketClient;
 
 const memoryStats = computed(() => {
   return metrics.value.map((metricsItem) => {
@@ -112,5 +116,20 @@ onMounted(async () => {
 
     metrics.value = newMetrics.slice(-1);
   };
+
+  ws = new WebsocketClient({
+    url: "/api/ws",
+  });
+
+  await ws.connect();
 });
+
+function sendMessage() {
+  ws.send(
+    JSON.stringify({
+      type: "command",
+      value: "ls",
+    })
+  );
+}
 </script>
