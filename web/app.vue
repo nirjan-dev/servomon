@@ -9,19 +9,12 @@
       <span> Battery: {{ batteryCharge }}</span>
     </h1>
 
-    <div class="flex flex-wrap gap-2">
+    <div class="grid gap-2">
       <UCard>
         <template #header>
           <h2>Memory</h2>
         </template>
         <UTable :rows="memoryStats" />
-      </UCard>
-
-      <UCard>
-        <template #header>
-          <h2>CPU</h2>
-        </template>
-        <UTable :rows="cpuStats" />
       </UCard>
 
       <UCard>
@@ -33,10 +26,21 @@
 
       <UCard>
         <template #header>
+          <h2>CPU</h2>
+        </template>
+        <UTable :rows="cpuStats" />
+      </UCard>
+
+      <UCard>
+        <template #header>
           <h2 class="inline-block mr-2">Top Processes</h2>
           <UButton color="red" @click="killSelectedProcesses">Kill</UButton>
         </template>
-        <UTable v-model="selectedProcesses" :rows="processesStats" />
+        <UTable
+          :columns="processTableColumns"
+          v-model="selectedProcesses"
+          :rows="processesStats"
+        />
       </UCard>
     </div>
     <UNotifications />
@@ -48,6 +52,26 @@ import type { Metrics, ProcessInfo } from "../shared/types";
 import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebsocketClient";
 const metrics = ref<Metrics[]>([]);
 const selectedProcesses = ref<typeof processesStats.value>([]);
+const processTableColumns = [
+  // NOTE: adding a placeholder to the start because for some reason if I make the table selectable it removes the first column
+  {
+    key: "placeholder",
+  },
+  {
+    key: "ID",
+    label: "ID",
+  },
+
+  {
+    key: "name",
+    label: "name",
+  },
+
+  {
+    key: "cpu",
+    label: "CPU",
+  },
+];
 const toast = useToast();
 
 let ws: CommandExecutorWebsocketClient;
@@ -59,6 +83,8 @@ const memoryStats = computed(() => {
 
       Free: metricsItem.memory.free,
 
+      Used: metricsItem.memory.used,
+
       "used %": metricsItem.memory.usedPercentage,
     };
   });
@@ -69,6 +95,7 @@ const cpuStats = computed(() => {
     return {
       Available: metricsItem.cpu.available,
       Used: metricsItem.cpu.used,
+      Cores: metricsItem.cpu.cores,
     };
   });
 });
@@ -98,8 +125,8 @@ const processesStats = computed(() => {
 
   return rawProcessStats.value.map((process) => {
     return {
-      "CPU usage": process.cpuPercent,
       name: process.app,
+      cpu: process.cpuPercent,
       ID: process.pid,
     };
   });

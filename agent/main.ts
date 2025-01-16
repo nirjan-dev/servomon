@@ -10,11 +10,11 @@ import {
 } from "../shared/types.ts";
 import {
   battery,
-  cpu,
   currentLoad,
   fsSize,
   mem,
   processes,
+  processLoad,
 } from "systeminformation";
 
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
@@ -44,17 +44,17 @@ console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
 console.log(`SERVER_URL: ${SERVER_URL}`);
 
 async function getMemoryStats(): Promise<MemoryInfo> {
-  const { total, available, used } = await mem();
+  const { total, available, active } = await mem();
 
   function formatMemory(memoryInBytes: number) {
-    return `${Math.ceil(memoryInBytes / 1024 / 1024 / 1024)} GBs`;
+    return `${(memoryInBytes / 1024 / 1024 / 1024).toFixed(1)} GBs`;
   }
 
   const memoryStats = {
     free: formatMemory(available),
     total: formatMemory(total),
-    used: formatMemory(used),
-    usedPercentage: `${Math.ceil((used / total) * 100)}%`,
+    used: formatMemory(active),
+    usedPercentage: `${((active / total) * 100).toFixed(1)}%`,
   };
 
   return memoryStats;
@@ -75,28 +75,37 @@ async function getCPUStats(): Promise<CpuInfo> {
   const available = 100 - used;
   const cores = cpus.length;
 
-  return {
-    available: `${available}%`,
+  const cpuStats = {
+    available: `${available.toFixed(1)}%`,
     cores,
-    used: `${used}%`,
+    used: `${used.toFixed(1)}%`,
   };
+  return cpuStats;
 }
 
 async function getProcessStats(): Promise<ProcessInfo[]> {
   const processStatsRaw = await processes();
-  const { cores } = await cpu();
 
   const topProcesses = processStatsRaw.list
     .sort((a, b) => b.cpu - a.cpu)
-    .splice(0, Math.min(10, processStatsRaw.list.length));
+    .splice(0, Math.min(50, processStatsRaw.list.length));
 
-  const processStats: ProcessInfo[] = topProcesses.map((process) => {
-    return {
-      app: process.name,
-      cpuPercent: `${Math.ceil((process.cpu * 100) / cores)}%`,
-      pid: process.pid,
-    };
-  });
+  const topProcessesName = new Set(topProcesses.map((p) => p.name));
+
+  const processesWithLoad = await processLoad(
+    Array.from(topProcessesName).join(",")
+  );
+
+  const processStats: ProcessInfo[] = processesWithLoad
+    .sort((a, b) => b.cpu - a.cpu)
+    .splice(0, Math.min(20, processesWithLoad.length))
+    .map((process) => {
+      return {
+        app: process.proc,
+        cpuPercent: `${process.cpu.toFixed(1)}%`,
+        pid: process.pid,
+      };
+    });
 
   return processStats;
 }
@@ -109,7 +118,7 @@ async function getDiskStats(): Promise<DiskInfo[]> {
   );
 
   function formatDiskSize(size: number) {
-    return `${Math.ceil(size / 1024 / 1024 / 1024)} GBs`;
+    return `${(size / 1024 / 1024 / 1024).toFixed(1)} GBs`;
   }
 
   const diskStats: DiskInfo[] = onlyPhysicalRawDiskStats.map((disk) => {
@@ -119,7 +128,7 @@ async function getDiskStats(): Promise<DiskInfo[]> {
       free: formatDiskSize(disk.available),
       total: formatDiskSize(disk.size),
       used: formatDiskSize(disk.used),
-      usedPercentage: `${disk.use}%`,
+      usedPercentage: `${disk.use.toFixed(1)}%`,
     };
   });
 
