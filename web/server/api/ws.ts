@@ -31,7 +31,7 @@ export default defineWebSocketHandler({
     if (peer.id !== serverPeer.id) {
       serverPeer.send(JSON.stringify(message.json()));
     } else {
-      clients.forEach((client) => client.send(message.json()));
+      clients.forEach((client) => client.send(JSON.stringify(message.json())));
     }
   },
 

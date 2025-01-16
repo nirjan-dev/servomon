@@ -9,8 +9,6 @@
       <span> Battery: {{ batteryCharge }}</span>
     </h1>
 
-    <UButton @click="sendMessage">Send command</UButton>
-
     <div class="flex flex-wrap gap-2">
       <UCard>
         <template #header>
@@ -35,20 +33,24 @@
 
       <UCard>
         <template #header>
-          <h2>Top Processes</h2>
+          <h2 class="inline-block mr-2">Top Processes</h2>
+          <UButton color="red" @click="killSelectedProcesses">Kill</UButton>
         </template>
-        <UTable :rows="processesStats" />
+        <UTable v-model="selectedProcesses" :rows="processesStats" />
       </UCard>
     </div>
+    <UNotifications />
   </UContainer>
 </template>
 
 <script setup lang="ts">
-import type { Metrics } from "../shared/types";
-import { WebsocketClient } from "../shared/lib/WebsocketClient";
+import type { Metrics, ProcessInfo } from "../shared/types";
+import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebsocketClient";
 const metrics = ref<Metrics[]>([]);
+const selectedProcesses = ref<typeof processesStats.value>([]);
+const toast = useToast();
 
-let ws: WebsocketClient;
+let ws: CommandExecutorWebsocketClient;
 
 const memoryStats = computed(() => {
   return metrics.value.map((metricsItem) => {
@@ -87,12 +89,14 @@ const diskStats = computed(() => {
   });
 });
 
+const rawProcessStats = ref<ProcessInfo[]>([]);
+
 const processesStats = computed(() => {
-  if (!metrics.value[0]) {
+  if (!rawProcessStats.value.length) {
     return [];
   }
 
-  return metrics.value[0].processes.map((process) => {
+  return rawProcessStats.value.map((process) => {
     return {
       "CPU usage": process.cpuPercent,
       name: process.app,
@@ -115,21 +119,32 @@ onMounted(async () => {
     const newMetrics = JSON.parse(event.data) as Metrics[];
 
     metrics.value = newMetrics.slice(-1);
+
+    if (!selectedProcesses.value.length) {
+      rawProcessStats.value = metrics.value[0].processes;
+    }
   };
 
-  ws = new WebsocketClient({
+  ws = new CommandExecutorWebsocketClient({
     url: "/api/ws",
   });
 
   await ws.connect();
 });
 
-function sendMessage() {
-  ws.send(
-    JSON.stringify({
-      type: "command",
-      value: "ls",
-    })
-  );
+function killSelectedProcesses() {
+  if (!selectedProcesses.value.length) {
+    return;
+  }
+  selectedProcesses.value.forEach((process) => {
+    ws.executeCommand({
+      type: "process",
+      action: "kill",
+      pid: String(process.ID),
+      processName: process.name,
+    });
+  });
+
+  selectedProcesses.value = [];
 }
 </script>

@@ -1,11 +1,11 @@
-type WebsocketCallbacks = {
+export type WebsocketCallbacks = {
   onMessage?: (data: string) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
   onError?: () => void;
 };
 
-type WebsocketClientConfig = {
+export type WebsocketClientConfig = {
   url: string;
   maxReconnectAttempts?: number;
   reconnectInterval?: number;
@@ -147,7 +147,7 @@ export class WebsocketClient {
     console.log(`Event: ${event}`, data);
   }
 
-  private handleMessage(data: unknown): void {
+  protected handleMessage(data: unknown): void {
     console.log(`Received message: ${data}`);
   }
 

@@ -8,7 +8,7 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "generate:schema": "ts-to-zod ../shared/types.ts ./shared/schemas.zod.ts"
+    "generate:schema": "ts-to-zod ../shared/types.ts ./shared/schemas.zod.ts && cp ./shared/schemas.zod.ts ../agent/schemas/"
   },
   "devDependencies": {
     "@flydotio/dockerfile": "^0.5.9",
