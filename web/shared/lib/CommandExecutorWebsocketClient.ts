@@ -1,8 +1,5 @@
 import { commandResultSchema } from "~/shared/schemas.zod";
-import {
-  WebsocketClient,
-  type WebsocketClientConfig,
-} from "../../../shared/lib/WebsocketClient";
+import { WebsocketClient, type WebsocketClientConfig } from "./WebsocketClient";
 import type { Command, CommandResult } from "../../../shared/types";
 
 export class CommandExecutorWebsocketClient extends WebsocketClient {
