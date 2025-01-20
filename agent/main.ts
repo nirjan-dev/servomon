@@ -7,10 +7,13 @@ import {
   CpuInfo,
   ProcessInfo,
   DiskInfo,
+  ContainerInfo,
 } from "../shared/types.ts";
 import {
   battery,
   currentLoad,
+  dockerContainers,
+  dockerContainerStats,
   fsSize,
   mem,
   processes,
@@ -135,6 +138,27 @@ async function getDiskStats(): Promise<DiskInfo[]> {
   return diskStats;
 }
 
+async function getContainersInfo(): Promise<ContainerInfo[]> {
+  const rawContainerStats = await dockerContainerStats("*");
+  const dockerContainersInfo = await dockerContainers();
+  const containerStats: ContainerInfo[] = rawContainerStats
+    .toSorted((a, b) => b.cpuPercent - a.cpuPercent)
+    .map((stats) => {
+      const statsInfo = dockerContainersInfo.find((c) => c.id === stats.id);
+
+      return {
+        id: stats.id.split("").slice(0, 12).join(""),
+        name: statsInfo?.name ?? "unknown",
+        cpuUsed: `${stats.cpuPercent.toFixed(2)}%`,
+        memoryUsed: `${(stats.memUsage / 1024 / 1024).toFixed(2)} MBs`,
+        memoryUsedPercent: `${stats.memPercent.toFixed(2)}%`,
+        state: statsInfo?.state ?? "unknown",
+      };
+    });
+
+  return containerStats;
+}
+
 async function getMetrics(): Promise<Metrics> {
   return {
     timestamp: Date.now(),
@@ -145,6 +169,7 @@ async function getMetrics(): Promise<Metrics> {
 
     processes: await getProcessStats(),
     disk: await getDiskStats(),
+    containersInfo: await getContainersInfo(),
   };
 }
 

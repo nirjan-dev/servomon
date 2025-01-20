@@ -33,6 +33,15 @@ export const batteryInfoSchema = z.object({
   charge: z.string(),
 });
 
+export const containerInfoSchema = z.object({
+  memoryUsedPercent: z.string(),
+  memoryUsed: z.string(),
+  cpuUsed: z.string(),
+  name: z.string(),
+  id: z.string(),
+  state: z.string(),
+});
+
 export const metricsSchema = z.object({
   timestamp: z.number(),
   memory: memoryInfoSchema,
@@ -40,6 +49,7 @@ export const metricsSchema = z.object({
   processes: z.array(processInfoSchema),
   disk: z.array(diskInfoSchema),
   battery: batteryInfoSchema,
+  containersInfo: z.array(containerInfoSchema),
 });
 
 export const commandTypeSchema = z.literal("process");

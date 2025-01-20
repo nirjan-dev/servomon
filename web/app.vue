@@ -33,6 +33,14 @@
 
       <UCard>
         <template #header>
+          <h2 class="inline-block mr-2">Top Containers</h2>
+          <UButton color="red">Stop</UButton>
+        </template>
+        <UTable :rows="dockerStats" />
+      </UCard>
+
+      <UCard>
+        <template #header>
           <h2 class="inline-block mr-2">Top Processes</h2>
           <UButton color="red" @click="killSelectedProcesses">Kill</UButton>
         </template>
@@ -128,6 +136,22 @@ const processesStats = computed(() => {
       name: process.app,
       cpu: process.cpuPercent,
       ID: process.pid,
+    };
+  });
+});
+
+const dockerStats = computed(() => {
+  if (!metrics.value[0]) {
+    return [];
+  }
+
+  return metrics.value[0].containersInfo.map((container) => {
+    return {
+      name: container.name,
+      state: container.state,
+      cpu: container.cpuUsed,
+      memory: container.memoryUsed,
+      "memory %": container.memoryUsedPercent,
     };
   });
 });

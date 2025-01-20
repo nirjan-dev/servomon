@@ -30,6 +30,15 @@ export interface BatteryInfo {
   charge: string;
 }
 
+export interface ContainerInfo {
+  memoryUsedPercent: string;
+  memoryUsed: string;
+  cpuUsed: string;
+  name: string;
+  id: string;
+  state: string;
+}
+
 export interface Metrics {
   timestamp: number;
   memory: MemoryInfo;
@@ -37,6 +46,7 @@ export interface Metrics {
   processes: ProcessInfo[];
   disk: DiskInfo[];
   battery: BatteryInfo;
+  containersInfo: ContainerInfo[];
 }
 
 // Command Types
