@@ -1,4 +1,9 @@
-import { ProcessCommand, ProcessCommandResult } from "./../../shared/types.ts";
+import {
+  DockerCommand,
+  DockerCommandResult,
+  ProcessCommand,
+  ProcessCommandResult,
+} from "./../../shared/types.ts";
 import type { WebsocketClientConfig } from "../../shared/lib/WebsocketClient.ts";
 import { WebsocketClient } from "../../shared/lib/WebsocketClient.ts";
 import { commandSchema } from "../schemas/schemas.zod.ts";
@@ -25,7 +30,16 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
       let result: CommandResult | null = null;
       switch (parsedCommand.data.type) {
         case "process":
-          result = await this.handleProcessCommands(parsedCommand.data);
+          result = {
+            type: "process",
+            data: await this.handleProcessCommands(parsedCommand.data),
+          };
+          break;
+        case "docker":
+          result = {
+            type: "docker",
+            data: await this.handleDockerCommands(parsedCommand.data),
+          };
           break;
         default:
           break;
@@ -36,6 +50,51 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
     } catch (error) {
       console.log("error parsing command", error);
     }
+  }
+  private async handleDockerCommands(
+    command: DockerCommand
+  ): Promise<DockerCommandResult> {
+    console.log("handling docker command", command);
+
+    let process;
+
+    switch (command.action) {
+      case "unpause":
+        process = new Deno.Command("docker", {
+          args: ["container", "unpause", command.containerName],
+        });
+        break;
+      case "pause":
+        process = new Deno.Command("docker", {
+          args: ["container", "pause", command.containerName],
+        });
+        break;
+      case "stop":
+        process = new Deno.Command("docker", {
+          args: ["container", "stop", command.containerName],
+        });
+        break;
+      default:
+        break;
+    }
+
+    if (process) {
+      const output = await process.output();
+
+      return {
+        success: output.code === 0,
+        timestamp: new Date().getMilliseconds(),
+        containerName: command.containerName,
+        error: new TextDecoder().decode(output.stderr),
+      };
+    }
+
+    return {
+      success: false,
+      timestamp: new Date().getMilliseconds(),
+      containerName: command.containerName,
+      error: "error executing docker command",
+    };
   }
 
   private sendCommandResult(result: CommandResult) {

@@ -34,9 +34,23 @@
       <UCard>
         <template #header>
           <h2 class="inline-block mr-2">Top Containers</h2>
-          <UButton color="red">Stop</UButton>
+          <div class="inline-flex gap-2">
+            <UButton color="red" @click="executeDockerCommand('stop')"
+              >Stop</UButton
+            >
+            <UButton color="yellow" @click="executeDockerCommand('pause')"
+              >Pause</UButton
+            >
+            <UButton color="green" @click="executeDockerCommand('unpause')"
+              >Unpause</UButton
+            >
+          </div>
         </template>
-        <UTable :rows="dockerStats" />
+        <UTable
+          v-model="selectedContainers"
+          :rows="dockerStats"
+          :columns="containersColumns"
+        />
       </UCard>
 
       <UCard>
@@ -56,10 +70,15 @@
 </template>
 
 <script setup lang="ts">
-import type { Metrics, ProcessInfo } from "../shared/types";
+import {
+  type ContainerInfo,
+  type Metrics,
+  type ProcessInfo,
+} from "../shared/types";
 import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebsocketClient";
 const metrics = ref<Metrics[]>([]);
 const selectedProcesses = ref<typeof processesStats.value>([]);
+const selectedContainers = ref<typeof dockerStats.value>([]);
 const processTableColumns = [
   // NOTE: adding a placeholder to the start because for some reason if I make the table selectable it removes the first column
   {
@@ -139,13 +158,13 @@ const processesStats = computed(() => {
     };
   });
 });
-
+const rawDockerStats = ref<ContainerInfo[]>([]);
 const dockerStats = computed(() => {
-  if (!metrics.value[0]) {
+  if (!rawDockerStats.value.length) {
     return [];
   }
 
-  return metrics.value[0].containersInfo.map((container) => {
+  return rawDockerStats.value.map((container) => {
     return {
       name: container.name,
       state: container.state,
@@ -155,6 +174,33 @@ const dockerStats = computed(() => {
     };
   });
 });
+
+const containersColumns = [
+  {
+    key: "spaceForSelectBox",
+    label: "space for select box",
+  },
+  {
+    key: "name",
+    label: "name",
+  },
+  {
+    key: "state",
+    label: "state",
+  },
+  {
+    key: "cpu",
+    label: "cpu",
+  },
+  {
+    key: "memory",
+    label: "memory",
+  },
+  {
+    key: "memory %",
+    label: "memory %",
+  },
+];
 
 const batteryCharge = computed(() => {
   if (!metrics.value[0]) {
@@ -173,6 +219,10 @@ onMounted(async () => {
 
     if (!selectedProcesses.value.length) {
       rawProcessStats.value = metrics.value[0].processes;
+    }
+
+    if (!selectedContainers.value.length) {
+      rawDockerStats.value = metrics.value[0].containersInfo;
     }
   };
 
@@ -197,5 +247,21 @@ function killSelectedProcesses() {
   });
 
   selectedProcesses.value = [];
+}
+
+function executeDockerCommand(action: "pause" | "unpause" | "stop") {
+  if (!selectedContainers.value.length) {
+    return;
+  }
+
+  selectedContainers.value.forEach((container) => {
+    ws.executeCommand({
+      type: "docker",
+      action,
+      containerName: container.name,
+    });
+  });
+
+  selectedContainers.value = [];
 }
 </script>

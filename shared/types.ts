@@ -52,8 +52,7 @@ export interface Metrics {
 // Command Types
 export type CommandType =
   // | "shell"
-  "process";
-// | "docker"
+  "process" | "docker";
 // | "service"
 // | "network";
 
@@ -109,16 +108,11 @@ export interface ProcessCommandResult extends BaseCommandResult {
 }
 
 // Docker Commands
-// export interface DockerCommand extends BaseCommand {
-//   type: "docker";
-//   action: "start" | "stop" | "restart" | "list" | "remove" | "logs" | "exec";
-//   containerId?: string;
-//   containerName: string;
-//   image?: string;
-//   ports?: Array<{ host: number; container: number }>;
-//   env?: Record<string, string>;
-//   command?: string[];
-// }
+export interface DockerCommand extends BaseCommand {
+  type: "docker";
+  action: "stop" | "pause" | "unpause";
+  containerName: string;
+}
 
 // export interface ContainerInfo {
 //   id: string;
@@ -131,11 +125,10 @@ export interface ProcessCommandResult extends BaseCommandResult {
 //   health?: "healthy" | "unhealthy" | "none";
 // }
 
-// export interface DockerCommandResult extends BaseCommandResult {
-//   containers?: ContainerInfo[];
-//   logs?: string;
-//   containerId?: string;
-// }
+export interface DockerCommandResult extends BaseCommandResult {
+  logs?: string;
+  containerName?: string;
+}
 
 // Service Commands
 // export interface ServiceCommand extends BaseCommand {
@@ -192,7 +185,7 @@ export interface ProcessCommandResult extends BaseCommandResult {
 //   | DockerCommand
 //   | ServiceCommand
 //   | NetworkCommand;
-export type Command = ProcessCommand;
+export type Command = ProcessCommand | DockerCommand;
 
 // export type CommandResult =
 //   | ShellCommandResult
@@ -200,7 +193,15 @@ export type Command = ProcessCommand;
 //   | DockerCommandResult
 //   | ServiceCommandResult
 //   | NetworkCommandResult;
-export type CommandResult = ProcessCommandResult;
+export type CommandResult =
+  | {
+      type: "process";
+      data: ProcessCommandResult;
+    }
+  | {
+      type: "docker";
+      data: DockerCommandResult;
+    };
 
 // Utility Types
 // export interface CommandStatus {

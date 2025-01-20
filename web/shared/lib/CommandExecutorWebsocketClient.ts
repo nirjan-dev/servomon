@@ -37,10 +37,25 @@ export class CommandExecutorWebsocketClient extends WebsocketClient {
   }
 
   private sendOutputNotification(result: CommandResult) {
+    let message;
+
+    switch (result.type) {
+      case "docker":
+        message = `Docker command for ${result.data.containerName} container`;
+        break;
+      case "process":
+        message = `Process command for ${result.data.affectedProcessName}`;
+        break;
+      default:
+        break;
+    }
+
     useToast().add({
-      title: `Command execution ${result.success ? "succeeded" : "failed"}`,
-      color: result.success ? "green" : "red",
-      description: `Affected process: ${result.affectedProcessName}`,
+      title: `Command execution ${
+        result.data.success ? "succeeded" : "failed"
+      }`,
+      color: result.data.success ? "green" : "red",
+      description: message,
     });
   }
 }

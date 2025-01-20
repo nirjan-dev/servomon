@@ -52,7 +52,10 @@ export const metricsSchema = z.object({
   containersInfo: z.array(containerInfoSchema),
 });
 
-export const commandTypeSchema = z.literal("process");
+export const commandTypeSchema = z.union([
+  z.literal("process"),
+  z.literal("docker"),
+]);
 
 export const baseCommandSchema = z.object({
   type: commandTypeSchema,
@@ -95,6 +98,33 @@ export const processCommandResultSchema = baseCommandResultSchema.extend({
   affectedProcessName: z.string(),
 });
 
-export const commandSchema = processCommandSchema;
+export const dockerCommandSchema = baseCommandSchema.extend({
+  type: z.literal("docker"),
+  action: z.union([
+    z.literal("stop"),
+    z.literal("pause"),
+    z.literal("unpause"),
+  ]),
+  containerName: z.string(),
+});
 
-export const commandResultSchema = processCommandResultSchema;
+export const dockerCommandResultSchema = baseCommandResultSchema.extend({
+  logs: z.string().optional(),
+  containerName: z.string().optional(),
+});
+
+export const commandSchema = z.union([
+  processCommandSchema,
+  dockerCommandSchema,
+]);
+
+export const commandResultSchema = z.union([
+  z.object({
+    type: z.literal("process"),
+    data: processCommandResultSchema,
+  }),
+  z.object({
+    type: z.literal("docker"),
+    data: dockerCommandResultSchema,
+  }),
+]);
