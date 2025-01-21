@@ -23,8 +23,7 @@ export default defineNuxtConfig({
     public: {
       enableDiscordAlerts: false,
     },
-    username: "",
-    password: "",
+    agentToken: "",
   },
   basicAuth: {
     enabled: true,

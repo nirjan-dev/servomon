@@ -3,6 +3,19 @@ import { Metrics } from "../../../shared/types";
 import { metricsSchema } from "~/shared/schemas.zod";
 
 export default defineEventHandler(async (event) => {
+  const { agentToken } = useRuntimeConfig();
+
+  const authHeader = getHeader(event, "Authorization");
+
+  const token = authHeader?.split(" ")[1];
+
+  if (!token || token !== agentToken) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "No token or unauthorized agent token in header",
+    });
+  }
+
   const metricsData = await readValidatedBody(event, (body) =>
     metricsSchema.safeParse(body)
   );
@@ -22,7 +35,7 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    statusCode: 200,
+    statusCode: 201,
     statusMessage: "OK",
   };
 });

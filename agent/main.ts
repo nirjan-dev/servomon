@@ -25,6 +25,10 @@ const SERVER_URL = Deno.env.get("SERVER_URL");
 const REQUESTS_PER_MINUTE_UNIT =
   Number(Deno.env.get("REQUESTS_PER_MINUTE_UNIT")) ?? 5;
 const MINUTE_UNIT = Number(Deno.env.get("MINUTE_UNIT"));
+const AGENT_TOKEN = Deno.env.get("AGENT_TOKEN");
+if (!AGENT_TOKEN) {
+  throw new Error("No AGENT_TOKEN set in env variables. Exiting agent...");
+}
 
 const requestIntervalMilliSeconds = getRequestIntervalMilliSeconds(
   REQUESTS_PER_MINUTE_UNIT,
@@ -187,13 +191,18 @@ setInterval(async () => {
 
   const metrics = await getMetrics();
   try {
-    await fetch(`${SERVER_URL}/api/metrics`, {
+    const response = await fetch(`${SERVER_URL}/api/metrics`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${AGENT_TOKEN}`,
       },
       body: JSON.stringify(metrics),
     });
+    const parsedResponse = await response.json();
+    if (parsedResponse?.statusCode !== 201) {
+      throw new Error(`Error sending metrics ` + parsedResponse?.statusMessage);
+    }
   } catch (error) {
     console.error(error);
   }
