@@ -16,12 +16,18 @@ export default defineNuxtConfig({
       "*/2 * * * *": ["metrics:cleanup"],
     },
   },
-  modules: ["@nuxt/ui"],
+  modules: ["@nuxt/ui", "@kgierke/nuxt-basic-auth"],
   compatibilityDate: "2024-12-30",
   runtimeConfig: {
     discordWebhookUrl: "",
     public: {
       enableDiscordAlerts: false,
     },
+    username: "",
+    password: "",
+  },
+  basicAuth: {
+    enabled: true,
+    allowedRoutes: ["/api/.*"],
   },
 });

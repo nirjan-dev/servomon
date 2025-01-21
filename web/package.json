@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@flydotio/dockerfile": "^0.5.9",
+    "@kgierke/nuxt-basic-auth": "1.7.0",
     "@nuxt/devtools": "latest",
     "@nuxt/ui": "^2.20.0",
     "nuxt": "^3.15.0",
