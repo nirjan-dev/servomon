@@ -72,9 +72,9 @@ async function getBatteryStats(): Promise<BatteryInfo> {
 }
 
 async function getCPUStats(): Promise<CpuInfo> {
-  const { avgLoad, cpus } = await currentLoad();
+  const { currentLoad: cpuLoad, cpus } = await currentLoad();
 
-  const used = avgLoad * 100;
+  const used = cpuLoad;
   const available = 100 - used;
   const cores = cpus.length;
 
@@ -101,12 +101,13 @@ async function getProcessStats(): Promise<ProcessInfo[]> {
 
   const processStats: ProcessInfo[] = processesWithLoad
     .sort((a, b) => b.cpu - a.cpu)
-    .splice(0, Math.min(20, processesWithLoad.length))
+    .splice(0, Math.min(12, processesWithLoad.length))
     .map((process) => {
       return {
         app: process.proc,
-        cpuPercent: `${process.cpu.toFixed(1)}%`,
+        cpuPercent: `${process.cpu.toFixed(2)}%`,
         pid: process.pid,
+        memoryPercent: `${process.mem.toFixed(2)}%`,
       };
     });
 

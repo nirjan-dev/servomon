@@ -2,6 +2,7 @@ export interface ProcessInfo {
   app: string;
   pid: number;
   cpuPercent: string;
+  memoryPercent: string;
 }
 
 export interface DiskInfo {

@@ -31,7 +31,7 @@
         <UTable :rows="cpuStats" />
       </UCard>
 
-      <UCard>
+      <UCard v-if="dockerStats.length">
         <template #header>
           <h2 class="inline-block mr-2">Top Containers</h2>
           <div class="inline-flex gap-2">
@@ -98,6 +98,10 @@ const processTableColumns = [
     key: "cpu",
     label: "CPU",
   },
+  {
+    key: "memory",
+    label: "memory",
+  },
 ];
 const toast = useToast();
 
@@ -155,6 +159,7 @@ const processesStats = computed(() => {
       name: process.app,
       cpu: process.cpuPercent,
       ID: process.pid,
+      memory: process.memoryPercent,
     };
   });
 });

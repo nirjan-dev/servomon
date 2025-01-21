@@ -5,6 +5,7 @@ export const processInfoSchema = z.object({
   app: z.string(),
   pid: z.number(),
   cpuPercent: z.string(),
+  memoryPercent: z.string(),
 });
 
 export const diskInfoSchema = z.object({
