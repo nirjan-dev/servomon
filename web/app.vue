@@ -1,13 +1,23 @@
 <template>
+  <VitePwaManifest />
   <UContainer>
-    <h1 class="py-4 text-lg">
-      Server Metrics (last updated:
-      <span v-if="metrics[0]"
-        >{{ new Date(metrics[0].timestamp).toLocaleTimeString() }})</span
-      >
+    <div>
+      <div class="flex items-center py-6 gap-2">
+        <img class="h-10" src="/logo.svg" alt="" />
+        <h1>
+          <span class="font-bold text-lg">Servomon</span> | simple home server
+          monitoring
+        </h1>
+      </div>
 
-      <span> Battery: {{ batteryCharge }}</span>
-    </h1>
+      <h2 class="py-4 text-lg">
+        Server Metrics (last updated:
+        <span v-if="metrics[0]"
+          >{{ new Date(metrics[0].timestamp).toLocaleTimeString() }})</span
+        >
+        <span> Battery: {{ batteryCharge }}</span>
+      </h2>
+    </div>
 
     <div class="grid gap-2">
       <UCard>
