@@ -6,6 +6,9 @@ export default defineNuxtConfig({
       metrics: {
         driver: "memory",
       },
+      pushSubs: {
+        driver: "memory",
+      },
     },
     experimental: {
       tasks: true,
@@ -22,8 +25,10 @@ export default defineNuxtConfig({
     discordWebhookUrl: "",
     public: {
       enableDiscordAlerts: false,
+      pushPublicKey: "",
     },
     agentToken: "",
+    pushPrivateKey: "",
   },
   basicAuth: {
     enabled: true,
@@ -53,6 +58,16 @@ export default defineNuxtConfig({
   pwa: {
     devOptions: {
       enabled: true,
+    },
+    workbox: {
+      skipWaiting: true,
+      runtimeCaching: [
+        {
+          urlPattern: new RegExp("^.*"),
+          handler: "NetworkOnly",
+        },
+      ],
+      importScripts: ["sw-custom.js"],
     },
     manifest: {
       name: "Servomon - Simple Home Server Monitoring",
