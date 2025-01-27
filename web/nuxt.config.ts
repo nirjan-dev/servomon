@@ -31,7 +31,6 @@ export default defineNuxtConfig({
     pushPrivateKey: "",
   },
   basicAuth: {
-    enabled: true,
     allowedRoutes: ["/api/.*"],
   },
   app: {
@@ -57,7 +56,7 @@ export default defineNuxtConfig({
   },
   pwa: {
     devOptions: {
-      enabled: true,
+      enabled: false,
     },
     workbox: {
       skipWaiting: true,
