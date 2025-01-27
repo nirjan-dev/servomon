@@ -11,7 +11,7 @@ export interface DiskInfo {
   total: string;
   free: string;
   used: string;
-  usedPercentage: string;
+  usedPercentage: number;
 }
 
 export interface MemoryInfo {
@@ -28,7 +28,7 @@ export interface CpuInfo {
 }
 
 export interface BatteryInfo {
-  charge: string;
+  charge: number;
 }
 
 export interface ContainerInfo {

@@ -17,6 +17,8 @@ export default defineNuxtConfig({
     scheduledTasks: {
       "* * * * *": ["metrics:healthcheck"],
       "*/2 * * * *": ["metrics:cleanup"],
+      "0 * * * *": ["metrics:battery"],
+      "0 9 * * *": ["metrics:storage"],
     },
   },
   modules: ["@nuxt/ui", "@kgierke/nuxt-basic-auth", "@vite-pwa/nuxt"],

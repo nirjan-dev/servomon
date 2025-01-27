@@ -172,7 +172,7 @@ const diskStats = computed(() => {
       mount: disk.mountPoint,
       free: disk.free,
       used: disk.used,
-      "used %": disk.usedPercentage,
+      "used %": disk.usedPercentage + "%",
     };
   });
 });
@@ -241,7 +241,7 @@ const batteryCharge = computed(() => {
   if (!metrics.value[0]) {
     return "loading...";
   }
-  return metrics.value[0].battery.charge;
+  return metrics.value[0].battery.charge + "%";
 });
 
 onMounted(async () => {

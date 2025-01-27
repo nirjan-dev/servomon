@@ -14,7 +14,7 @@ export const diskInfoSchema = z.object({
   total: z.string(),
   free: z.string(),
   used: z.string(),
-  usedPercentage: z.string(),
+  usedPercentage: z.number(),
 });
 
 export const memoryInfoSchema = z.object({
@@ -31,7 +31,7 @@ export const cpuInfoSchema = z.object({
 });
 
 export const batteryInfoSchema = z.object({
-  charge: z.string(),
+  charge: z.number(),
 });
 
 export const containerInfoSchema = z.object({

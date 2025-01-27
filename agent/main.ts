@@ -74,7 +74,7 @@ async function getBatteryStats(): Promise<BatteryInfo> {
   const { percent } = await battery();
 
   return {
-    charge: percent + "%",
+    charge: percent,
   };
 }
 
@@ -139,7 +139,7 @@ async function getDiskStats(): Promise<DiskInfo[]> {
       free: formatDiskSize(disk.available),
       total: formatDiskSize(disk.size),
       used: formatDiskSize(disk.used),
-      usedPercentage: `${disk.use.toFixed(1)}%`,
+      usedPercentage: Number(disk.use.toFixed(1)),
     };
   });
 
