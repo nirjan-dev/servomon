@@ -8,6 +8,7 @@ import {
   ProcessInfo,
   DiskInfo,
   ContainerInfo,
+  NetworkInfo,
 } from "../shared/types.ts";
 import {
   battery,
@@ -16,6 +17,8 @@ import {
   dockerContainerStats,
   fsSize,
   mem,
+  networkInterfaceDefault,
+  networkStats,
   processes,
   processLoad,
 } from "systeminformation";
@@ -175,7 +178,67 @@ async function getMetrics(): Promise<Metrics> {
     processes: await getProcessStats(),
     disk: await getDiskStats(),
     containersInfo: await getContainersInfo(),
+    networkInfo: await getNetworkStats(),
   };
+}
+
+async function getNetworkStats(): Promise<NetworkInfo> {
+  const defaultInterface = await networkInterfaceDefault();
+  const [networkStat] = await networkStats(defaultInterface);
+
+  function getFormattedNetworkPercentageMetric(value: number, total: number) {
+    return `${((value / total) * 100).toFixed(2)}%`;
+  }
+
+  function getFormattedNetworkSpeed(bytes: number | null) {
+    if (!bytes) {
+      return "0 bytes/s";
+    }
+
+    let output = bytes;
+
+    if (output <= 100) {
+      return `${output.toFixed(2)} bytes/s`;
+    }
+
+    output = output / 1024;
+
+    if (output <= 100) {
+      return `${output.toFixed(2)} KiB/s`;
+    }
+
+    output = output / 1024;
+
+    if (output <= 100) {
+      return `${output.toFixed(2)} MiB/s`;
+    }
+
+    output = output / 1024;
+
+    return `${output.toFixed(2)} GiB/s`;
+  }
+
+  const formattedNetworkStats = {
+    downloadDrops: getFormattedNetworkPercentageMetric(
+      networkStat.rx_dropped,
+      networkStat.rx_bytes
+    ),
+    downloadErrors: getFormattedNetworkPercentageMetric(
+      networkStat.rx_errors,
+      networkStat.rx_bytes
+    ),
+    downloadPerSecond: getFormattedNetworkSpeed(networkStat.rx_sec),
+    uploadDrops: getFormattedNetworkPercentageMetric(
+      networkStat.tx_dropped,
+      networkStat.tx_bytes
+    ),
+    uploadErrors: getFormattedNetworkPercentageMetric(
+      networkStat.tx_errors,
+      networkStat.tx_bytes
+    ),
+    uploadPerSecond: getFormattedNetworkSpeed(networkStat.tx_sec),
+  };
+  return formattedNetworkStats;
 }
 
 // setup a timer to update the metrics every 5 seconds and send them to the web server

@@ -43,6 +43,15 @@ export const containerInfoSchema = z.object({
   state: z.string(),
 });
 
+export const networkInfoSchema = z.object({
+  downloadDrops: z.string(),
+  downloadErrors: z.string(),
+  downloadPerSecond: z.string(),
+  uploadDrops: z.string(),
+  uploadErrors: z.string(),
+  uploadPerSecond: z.string(),
+});
+
 export const metricsSchema = z.object({
   timestamp: z.number(),
   memory: memoryInfoSchema,
@@ -51,6 +60,7 @@ export const metricsSchema = z.object({
   disk: z.array(diskInfoSchema),
   battery: batteryInfoSchema,
   containersInfo: z.array(containerInfoSchema),
+  networkInfo: networkInfoSchema,
 });
 
 export const commandTypeSchema = z.union([

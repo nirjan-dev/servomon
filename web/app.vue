@@ -36,6 +36,13 @@
 
       <UCard>
         <template #header>
+          <h2>Network</h2>
+        </template>
+        <UTable :rows="networkStats" />
+      </UCard>
+
+      <UCard>
+        <template #header>
           <h2>CPU</h2>
         </template>
         <UTable :rows="cpuStats" />
@@ -127,6 +134,19 @@ const memoryStats = computed(() => {
       Used: metricsItem.memory.used,
 
       "used %": metricsItem.memory.usedPercentage,
+    };
+  });
+});
+
+const networkStats = computed(() => {
+  return metrics.value.map((metricsItem) => {
+    return {
+      Upload: metricsItem.networkInfo.uploadPerSecond,
+      Download: metricsItem.networkInfo.downloadPerSecond,
+      "Upload Error": metricsItem.networkInfo.uploadErrors,
+      "Upload Drops": metricsItem.networkInfo.uploadDrops,
+      "Download Error": metricsItem.networkInfo.downloadErrors,
+      "Download Drops": metricsItem.networkInfo.downloadDrops,
     };
   });
 });
@@ -317,16 +337,6 @@ async function subscribeUserToPushNotifications(
   }
 
   return newSub;
-}
-
-function base64ToUint8Array(base64String: string) {
-  const binaryString = atob(base64String);
-  const length = binaryString.length;
-  const bytes = new Uint8Array(length);
-  for (let i = 0; i < length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
 }
 
 function setupMetricsStream() {

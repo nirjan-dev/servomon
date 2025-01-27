@@ -40,6 +40,15 @@ export interface ContainerInfo {
   state: string;
 }
 
+export interface NetworkInfo {
+  downloadDrops: string;
+  downloadErrors: string;
+  downloadPerSecond: string;
+  uploadDrops: string;
+  uploadErrors: string;
+  uploadPerSecond: string;
+}
+
 export interface Metrics {
   timestamp: number;
   memory: MemoryInfo;
@@ -48,6 +57,7 @@ export interface Metrics {
   disk: DiskInfo[];
   battery: BatteryInfo;
   containersInfo: ContainerInfo[];
+  networkInfo: NetworkInfo;
 }
 
 // Command Types
