@@ -32,6 +32,7 @@ const REQUESTS_PER_MINUTE_UNIT =
   Number(Deno.env.get("REQUESTS_PER_MINUTE_UNIT")) ?? 5;
 const MINUTE_UNIT = Number(Deno.env.get("MINUTE_UNIT"));
 const AGENT_TOKEN = Deno.env.get("AGENT_TOKEN");
+const PORT = Number(Deno.env.get("PORT")) ?? 8000
 if (!AGENT_TOKEN) {
   throw new Error("No AGENT_TOKEN set in env variables. Exiting agent...");
 }
@@ -60,6 +61,7 @@ console.log(
 );
 console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
 console.log(`SERVER_URL: ${SERVER_URL}`);
+console.log(`PORT: ${PORT}`)
 
 async function getMemoryStats(): Promise<MemoryInfo> {
   const { total, available, active } = await mem();
@@ -297,5 +299,6 @@ const ws = new CommandResponderWebsocketClient({
 ws.connect();
 
 Deno.serve(
-  handler
+  {port: PORT},
+  handler,
 );
