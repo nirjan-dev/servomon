@@ -297,8 +297,5 @@ const ws = new CommandResponderWebsocketClient({
 ws.connect();
 
 Deno.serve(
-  {
-    port: 1234,
-  },
   handler
 );

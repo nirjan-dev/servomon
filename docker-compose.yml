@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  servomon-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      SEND_REQUESTS: "true"
+      SERVER_URL: "http://your-server-url"
+      REQUESTS_PER_MINUTE_UNIT: "5"
+      MINUTE_UNIT: "1"
+      AGENT_TOKEN: "your-agent-token"
