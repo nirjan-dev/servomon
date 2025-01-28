@@ -1,6 +1,6 @@
 import { CommandResponderWebsocketClient } from "./lib/CommandResponderWebsocketClient.ts";
 import "@std/dotenv/load";
-import {
+import type {
   Metrics,
   MemoryInfo,
   BatteryInfo,
@@ -22,6 +22,9 @@ import {
   processes,
   processLoad,
 } from "systeminformation";
+import denoJSON from "./deno.json" with {type: "json"}
+
+const version = denoJSON.version
 
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
 const SERVER_URL = Deno.env.get("SERVER_URL");
@@ -45,6 +48,11 @@ function getRequestIntervalMilliSeconds(
   const totalMilliSeconds = 1000 * 60 * minuteUnit;
   return totalMilliSeconds / requestsPerMinuteUnit;
 }
+
+console.log("Current Servomon agent version", version)
+console.log("Current Deno version", Deno.version.deno);
+console.log("Current TypeScript version", Deno.version.typescript);
+console.log("Current V8 version", Deno.version.v8);
 
 console.log(`REQUEST interval: ${requestIntervalMilliSeconds}`);
 console.log(

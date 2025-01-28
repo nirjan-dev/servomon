@@ -1,7 +1,10 @@
 {
+  "name": "@servomon/agent",
+  "exports": "./main.ts",
+  "version": "0.1.0",
   "tasks": {
     "dev": "deno run -A --watch --unstable-unsafe-proto main.ts",
-    "build": "deno compile --allow-all --unstable-unsafe-proto main.ts"
+    "build": "deno compile --output servomon-agent --allow-all --unstable-unsafe-proto main.ts"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@1",
