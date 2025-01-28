@@ -3,7 +3,7 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'nkmonitor'
+app = 'servomon'
 primary_region = 'hkg'
 
 [build]
@@ -19,3 +19,6 @@ primary_region = 'hkg'
 
 [[vm]]
   size = 'shared-cpu-1x'
+[[mounts]]
+  source = 'data'
+  destination = '/app/data'
