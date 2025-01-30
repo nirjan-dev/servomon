@@ -11,6 +11,9 @@ importers:
       '@types/web-push':
         specifier: ^3.6.4
         version: 3.6.4
+      vue-data-ui:
+        specifier: ^2.4.90
+        version: 2.4.90
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
@@ -4829,6 +4832,9 @@ packages:
 
   vue-bundle-renderer@2.1.1:
     resolution: {integrity: sha512-+qALLI5cQncuetYOXp4yScwYvqh8c6SMXee3B+M7oTZxOgtESP0l4j/fXdEJoZ+EdMxkGWIj+aSEyjXkOdmd7g==}
+
+  vue-data-ui@2.4.90:
+    resolution: {integrity: sha512-bDlfVT6oefSlA3eEyVYtM1Gzg7vSJjpKf14Thc6jfdj9Urf50lhBgIJIPw2A8ECqCePJQb8bNNZGOKk5igjd4g==}
 
   vue-devtools-stub@0.1.0:
     resolution: {integrity: sha512-RutnB7X8c5hjq39NceArgXg28WZtZpGc3+J16ljMiYnFhKvd8hITxSWQSQ5bvldxMDU6gG5mkxl1MTQLXckVSQ==}
@@ -10572,6 +10578,8 @@ snapshots:
   vue-bundle-renderer@2.1.1:
     dependencies:
       ufo: 1.5.4
+
+  vue-data-ui@2.4.90: {}
 
   vue-devtools-stub@0.1.0: {}
 

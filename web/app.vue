@@ -1,7 +1,9 @@
 <template>
   <VitePwaManifest />
   <UContainer>
-    <MetricsTitle :update-time="metrics[0]?.timestamp" />
+    <MetricsTitle />
+
+    <UpdateTime :update-time="metrics[0]?.timestamp" />
 
     <div class="grid gap-2">
       <UCard>
