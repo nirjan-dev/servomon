@@ -1,23 +1,7 @@
 <template>
   <VitePwaManifest />
   <UContainer>
-    <div>
-      <div class="flex items-center py-6 gap-2">
-        <img class="h-10" src="/logo.svg" alt="" />
-        <h1>
-          <span class="font-bold text-lg">Servomon</span> | simple home server
-          monitoring
-        </h1>
-      </div>
-
-      <h2 class="py-4 text-lg">
-        Server Metrics (last updated:
-        <span v-if="metrics[0]"
-          >{{ new Date(metrics[0].timestamp).toLocaleTimeString() }})</span
-        >
-        <span> Battery: {{ batteryCharge }}</span>
-      </h2>
-    </div>
+    <MetricsTitle :update-time="metrics[0]?.timestamp" />
 
     <div class="grid gap-2">
       <UCard>
@@ -269,7 +253,7 @@ async function setupPushSubscription() {
     // setup new sub
     const newSub = await subscribeUserToPushNotifications(
       pushManager,
-      pushPublicKey
+      pushPublicKey,
     );
 
     if (!newSub) {
@@ -312,14 +296,14 @@ async function storeSubscription(sub: PushSubscription) {
 
 async function subscribeUserToPushNotifications(
   pushManager: PushManager,
-  publicKey: string
+  publicKey: string,
 ): Promise<PushSubscription | undefined> {
   if (Notification.permission !== "granted") {
     await Notification.requestPermission();
   }
   if (Notification.permission !== "granted") {
     alert(
-      "Push notifications disabled because notification permission was denied"
+      "Push notifications disabled because notification permission was denied",
     );
     return;
   }
