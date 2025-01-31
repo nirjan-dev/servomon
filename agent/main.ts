@@ -22,9 +22,9 @@ import {
   processes,
   processLoad,
 } from "systeminformation";
-import denoJSON from "./deno.json" with {type: "json"}
+import denoJSON from "./deno.json" with { type: "json" };
 
-const version = denoJSON.version
+const version = denoJSON.version;
 
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
 const SERVER_URL = Deno.env.get("SERVER_URL");
@@ -32,49 +32,49 @@ const REQUESTS_PER_MINUTE_UNIT =
   Number(Deno.env.get("REQUESTS_PER_MINUTE_UNIT")) ?? 5;
 const MINUTE_UNIT = Number(Deno.env.get("MINUTE_UNIT"));
 const AGENT_TOKEN = Deno.env.get("AGENT_TOKEN");
-const PORT = Number(Deno.env.get("PORT")) ?? 8000
+const PORT = Number(Deno.env.get("PORT")) ?? 8000;
 if (!AGENT_TOKEN) {
   throw new Error("No AGENT_TOKEN set in env variables. Exiting agent...");
 }
 
 const requestIntervalMilliSeconds = getRequestIntervalMilliSeconds(
   REQUESTS_PER_MINUTE_UNIT,
-  MINUTE_UNIT
+  MINUTE_UNIT,
 );
 
 function getRequestIntervalMilliSeconds(
   requestsPerMinuteUnit: number,
-  minuteUnit: number
+  minuteUnit: number,
 ) {
   const totalMilliSeconds = 1000 * 60 * minuteUnit;
   return totalMilliSeconds / requestsPerMinuteUnit;
 }
 
-console.log("Current Servomon agent version", version)
+console.log("Current Servomon agent version", version);
 console.log("Current Deno version", Deno.version.deno);
 console.log("Current TypeScript version", Deno.version.typescript);
 console.log("Current V8 version", Deno.version.v8);
 
 console.log(`REQUEST interval: ${requestIntervalMilliSeconds}`);
 console.log(
-  `will send ${REQUESTS_PER_MINUTE_UNIT} requests every ${MINUTE_UNIT} minutes`
+  `will send ${REQUESTS_PER_MINUTE_UNIT} requests every ${MINUTE_UNIT} minutes`,
 );
 console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
 console.log(`SERVER_URL: ${SERVER_URL}`);
-console.log(`PORT: ${PORT}`)
+console.log(`PORT: ${PORT}`);
 
 async function getMemoryStats(): Promise<MemoryInfo> {
   const { total, available, active } = await mem();
 
   function formatMemory(memoryInBytes: number) {
-    return `${(memoryInBytes / 1024 / 1024 / 1024).toFixed(1)} GBs`;
+    return Number((memoryInBytes / 1024 / 1024 / 1024).toFixed(1));
   }
 
   const memoryStats = {
     free: formatMemory(available),
     total: formatMemory(total),
     used: formatMemory(active),
-    usedPercentage: `${((active / total) * 100).toFixed(1)}%`,
+    usedPercentage: Number(((active / total) * 100).toFixed(1)),
   };
 
   return memoryStats;
@@ -113,7 +113,7 @@ async function getProcessStats(): Promise<ProcessInfo[]> {
   const topProcessesName = new Set(topProcesses.map((p) => p.name));
 
   const processesWithLoad = await processLoad(
-    Array.from(topProcessesName).join(",")
+    Array.from(topProcessesName).join(","),
   );
 
   const processStats: ProcessInfo[] = processesWithLoad
@@ -135,7 +135,7 @@ async function getDiskStats(): Promise<DiskInfo[]> {
   const rawDiskStats = await fsSize();
 
   const onlyPhysicalRawDiskStats = rawDiskStats.filter((disk) =>
-    disk.fs.startsWith("/dev")
+    disk.fs.startsWith("/dev"),
   );
 
   function formatDiskSize(size: number) {
@@ -231,20 +231,20 @@ async function getNetworkStats(): Promise<NetworkInfo> {
   const formattedNetworkStats = {
     downloadDrops: getFormattedNetworkPercentageMetric(
       networkStat.rx_dropped,
-      networkStat.rx_bytes
+      networkStat.rx_bytes,
     ),
     downloadErrors: getFormattedNetworkPercentageMetric(
       networkStat.rx_errors,
-      networkStat.rx_bytes
+      networkStat.rx_bytes,
     ),
     downloadPerSecond: getFormattedNetworkSpeed(networkStat.rx_sec),
     uploadDrops: getFormattedNetworkPercentageMetric(
       networkStat.tx_dropped,
-      networkStat.tx_bytes
+      networkStat.tx_bytes,
     ),
     uploadErrors: getFormattedNetworkPercentageMetric(
       networkStat.tx_errors,
-      networkStat.tx_bytes
+      networkStat.tx_bytes,
     ),
     uploadPerSecond: getFormattedNetworkSpeed(networkStat.tx_sec),
   };
@@ -298,7 +298,4 @@ const ws = new CommandResponderWebsocketClient({
 
 ws.connect();
 
-Deno.serve(
-  {port: PORT},
-  handler,
-);
+Deno.serve({ port: PORT }, handler);

@@ -15,10 +15,10 @@ export interface DiskInfo {
 }
 
 export interface MemoryInfo {
-  total: string;
-  free: string;
-  used: string;
-  usedPercentage: string;
+  total: number;
+  free: number;
+  used: number;
+  usedPercentage: number;
 }
 
 export interface CpuInfo {

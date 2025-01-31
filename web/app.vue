@@ -5,6 +5,8 @@
 
     <UpdateTime :update-time="metrics[0]?.timestamp" />
 
+    <MemoryMetrics :memory-metrics="memoryStats" />
+
     <div class="grid gap-2">
       <UCard>
         <template #header>
@@ -113,13 +115,14 @@ let ws: CommandExecutorWebsocketClient;
 const memoryStats = computed(() => {
   return metrics.value.map((metricsItem) => {
     return {
-      Total: metricsItem.memory.total,
+      timestamp: metricsItem.timestamp,
+      total: metricsItem.memory.total,
 
-      Free: metricsItem.memory.free,
+      free: metricsItem.memory.free,
 
-      Used: metricsItem.memory.used,
+      used: metricsItem.memory.used,
 
-      "used %": metricsItem.memory.usedPercentage,
+      usedPercent: metricsItem.memory.usedPercentage,
     };
   });
 });
@@ -331,7 +334,7 @@ function setupMetricsStream() {
   metricsStream.onmessage = (event) => {
     const newMetrics = JSON.parse(event.data) as Metrics[];
 
-    metrics.value = newMetrics.slice(-1);
+    metrics.value = newMetrics;
 
     if (!selectedProcesses.value.length) {
       rawProcessStats.value = metrics.value[0].processes;

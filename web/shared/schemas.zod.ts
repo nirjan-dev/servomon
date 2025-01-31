@@ -18,10 +18,10 @@ export const diskInfoSchema = z.object({
 });
 
 export const memoryInfoSchema = z.object({
-  total: z.string(),
-  free: z.string(),
-  used: z.string(),
-  usedPercentage: z.string(),
+  total: z.number(),
+  free: z.number(),
+  used: z.number(),
+  usedPercentage: z.number(),
 });
 
 export const cpuInfoSchema = z.object({
