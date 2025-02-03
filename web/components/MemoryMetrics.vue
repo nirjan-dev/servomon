@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { VisXYContainer, VisLine, VisAxis } from "@unovis/vue";
+import { VisXYContainer, VisAxis, VisArea } from "@unovis/vue";
 const props = defineProps<{
   memoryMetrics: {
     total: number;
@@ -10,13 +10,15 @@ const props = defineProps<{
   }[];
 }>();
 type MemoryMetric = (typeof props.memoryMetrics)[0];
+const totalMemory = computed(() => props.memoryMetrics[0]?.total ?? 0);
 </script>
 
 <template>
   <UCard>
-    <template #header>Memory Used</template>
-    <VisXYContainer :data="memoryMetrics">
-      <VisLine
+    <template #header>Memory Usage</template>
+    <VisXYContainer :data="memoryMetrics" :yDomain="[0, totalMemory]">
+      <VisArea
+        color="tomato"
         :x="(d: MemoryMetric) => d.timestamp"
         :y="(d: MemoryMetric) => d.used"
       />
@@ -28,8 +30,8 @@ type MemoryMetric = (typeof props.memoryMetrics)[0];
         :tickFormat="(x: number) => new Date(x).toLocaleTimeString()"
       />
       <VisAxis
-        :gridLine="false"
-        :tickLine="undefined"
+        :gridLine="true"
+        :tickLine="true"
         :tickFormat="(y: number) => `${y} GBs`"
         type="y"
         label="Used"
