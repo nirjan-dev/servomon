@@ -1,13 +1,11 @@
 <template>
   <UCard class="max-w-fit">
     <template #header><h2>Last update</h2></template>
-    <h3 class="text-3xl text-primary">{{ valueToShow }}</h3>
+    <h3 class="text-2xl font-semibold text-primary">{{ valueToShow }}</h3>
   </UCard>
 </template>
 
 <script setup lang="ts">
-import { VueUiKpi } from "vue-data-ui";
-
 const props = defineProps<{
   updateTime?: number;
 }>();

@@ -2,19 +2,16 @@
   <VitePwaManifest />
   <UContainer>
     <MetricsTitle />
+    <div class="flex items-start gap-2">
+      <UpdateTime :update-time="metrics[0]?.timestamp" />
+      <MemoryOverview
+        v-if="memoryStats.at(-1)"
+        :memoryMetrics="memoryStats.at(-1)!"
+      />
 
-    <UpdateTime :update-time="metrics[0]?.timestamp" />
-
-    <MemoryMetrics :memory-metrics="memoryStats" />
-
+      <MemoryMetrics :memory-metrics="memoryStats" />
+    </div>
     <div class="grid gap-2">
-      <UCard>
-        <template #header>
-          <h2>Memory</h2>
-        </template>
-        <UTable :rows="memoryStats" />
-      </UCard>
-
       <UCard>
         <template #header>
           <h2>Storage</h2>
@@ -258,7 +255,7 @@ async function setupPushSubscription() {
     // setup new sub
     const newSub = await subscribeUserToPushNotifications(
       pushManager,
-      pushPublicKey,
+      pushPublicKey
     );
 
     if (!newSub) {
@@ -301,14 +298,14 @@ async function storeSubscription(sub: PushSubscription) {
 
 async function subscribeUserToPushNotifications(
   pushManager: PushManager,
-  publicKey: string,
+  publicKey: string
 ): Promise<PushSubscription | undefined> {
   if (Notification.permission !== "granted") {
     await Notification.requestPermission();
   }
   if (Notification.permission !== "granted") {
     alert(
-      "Push notifications disabled because notification permission was denied",
+      "Push notifications disabled because notification permission was denied"
     );
     return;
   }
