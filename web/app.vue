@@ -11,15 +11,12 @@
 
       <MemoryMetrics :memory-metrics="memoryStats" />
       <StorageMetrics :storage-metrics="diskStats" />
+      <NetworkOverview
+        v-if="networkStats.at(-1)"
+        :network-metrics="networkStats.at(-1)!"
+      />
     </div>
     <div class="grid gap-2">
-      <UCard>
-        <template #header>
-          <h2>Network</h2>
-        </template>
-        <UTable :rows="networkStats" />
-      </UCard>
-
       <UCard>
         <template #header>
           <h2>CPU</h2>
@@ -121,12 +118,12 @@ const memoryStats = computed(() => {
 const networkStats = computed(() => {
   return metrics.value.map((metricsItem) => {
     return {
-      Upload: metricsItem.networkInfo.uploadPerSecond,
-      Download: metricsItem.networkInfo.downloadPerSecond,
-      "Upload Error": metricsItem.networkInfo.uploadErrors,
-      "Upload Drops": metricsItem.networkInfo.uploadDrops,
-      "Download Error": metricsItem.networkInfo.downloadErrors,
-      "Download Drops": metricsItem.networkInfo.downloadDrops,
+      upload: metricsItem.networkInfo.uploadPerSecond,
+      download: metricsItem.networkInfo.downloadPerSecond,
+      uploadErrors: metricsItem.networkInfo.uploadErrors,
+      uploadDrops: metricsItem.networkInfo.uploadDrops,
+      downloadErrors: metricsItem.networkInfo.downloadErrors,
+      downloadDrops: metricsItem.networkInfo.downloadDrops,
     };
   });
 });
