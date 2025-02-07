@@ -26,8 +26,8 @@ export const memoryInfoSchema = z.object({
 
 export const cpuInfoSchema = z.object({
   cores: z.number(),
-  used: z.string(),
-  available: z.string(),
+  used: z.number(),
+  available: z.number(),
 });
 
 export const batteryInfoSchema = z.object({

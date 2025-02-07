@@ -96,9 +96,9 @@ async function getCPUStats(): Promise<CpuInfo> {
   const cores = cpus.length;
 
   const cpuStats = {
-    available: `${available.toFixed(1)}%`,
+    available: Number(available.toFixed(0)),
     cores,
-    used: `${used.toFixed(1)}%`,
+    used: Number(used.toFixed(0)),
   };
   return cpuStats;
 }

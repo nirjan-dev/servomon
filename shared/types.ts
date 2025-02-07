@@ -23,8 +23,8 @@ export interface MemoryInfo {
 
 export interface CpuInfo {
   cores: number;
-  used: string;
-  available: string;
+  used: number;
+  available: number;
 }
 
 export interface BatteryInfo {

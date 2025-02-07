@@ -26,7 +26,6 @@ const totalMemory = computed(() => props.memoryMetrics[0]?.total ?? 0);
         :tickLine="undefined"
         :gridLine="false"
         type="x"
-        label="Time"
         :tickFormat="(x: number) => new Date(x).toLocaleTimeString()"
       />
       <VisAxis
@@ -34,7 +33,6 @@ const totalMemory = computed(() => props.memoryMetrics[0]?.total ?? 0);
         :tickLine="true"
         :tickFormat="(y: number) => `${y} GBs`"
         type="y"
-        label="Used"
       />
     </VisXYContainer>
   </UCard>

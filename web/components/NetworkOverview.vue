@@ -1,5 +1,5 @@
 <template>
-  <UCard>
+  <UCard class="min-w-72">
     <template #header>Network Overview</template>
 
     <template v-for="(metric, label) in networkMetrics">

@@ -4,6 +4,7 @@
 
     <div class="flex gap-5">
       <VisXYContainer
+        width="60"
         v-for="(diskMetrics, index) in storageMetrics"
         :data="[diskMetrics]"
       >

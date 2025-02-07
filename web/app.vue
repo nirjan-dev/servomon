@@ -2,7 +2,7 @@
   <VitePwaManifest />
   <UContainer>
     <MetricsTitle />
-    <div class="flex items-start gap-2">
+    <div class="flex items-start gap-2 flex-wrap">
       <UpdateTime :update-time="metrics[0]?.timestamp" />
       <MemoryOverview
         v-if="memoryStats.at(-1)"
@@ -15,15 +15,9 @@
         v-if="networkStats.at(-1)"
         :network-metrics="networkStats.at(-1)!"
       />
+      <CPUUsage :cpu-metrics="cpuStats" />
     </div>
     <div class="grid gap-2">
-      <UCard>
-        <template #header>
-          <h2>CPU</h2>
-        </template>
-        <UTable :rows="cpuStats" />
-      </UCard>
-
       <UCard v-if="dockerStats.length">
         <template #header>
           <h2 class="inline-block mr-2">Top Containers</h2>
@@ -131,9 +125,10 @@ const networkStats = computed(() => {
 const cpuStats = computed(() => {
   return metrics.value.map((metricsItem) => {
     return {
-      Available: metricsItem.cpu.available,
-      Used: metricsItem.cpu.used,
+      available: metricsItem.cpu.available,
+      used: metricsItem.cpu.used,
       Cores: metricsItem.cpu.cores,
+      timestamp: metricsItem.timestamp,
     };
   });
 });
