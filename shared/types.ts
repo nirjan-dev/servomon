@@ -8,9 +8,9 @@ export interface ProcessInfo {
 export interface DiskInfo {
   device: string;
   mountPoint: string;
-  total: string;
-  free: string;
-  used: string;
+  total: number;
+  free: number;
+  used: number;
   usedPercentage: number;
 }
 

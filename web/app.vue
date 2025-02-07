@@ -10,15 +10,9 @@
       />
 
       <MemoryMetrics :memory-metrics="memoryStats" />
+      <StorageMetrics :storage-metrics="diskStats" />
     </div>
     <div class="grid gap-2">
-      <UCard>
-        <template #header>
-          <h2>Storage</h2>
-        </template>
-        <UTable :rows="diskStats" />
-      </UCard>
-
       <UCard>
         <template #header>
           <h2>Network</h2>
@@ -158,7 +152,8 @@ const diskStats = computed(() => {
       mount: disk.mountPoint,
       free: disk.free,
       used: disk.used,
-      "used %": disk.usedPercentage + "%",
+      total: disk.total,
+      usedPercent: disk.usedPercentage,
     };
   });
 });

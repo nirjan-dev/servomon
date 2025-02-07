@@ -11,9 +11,9 @@ export const processInfoSchema = z.object({
 export const diskInfoSchema = z.object({
   device: z.string(),
   mountPoint: z.string(),
-  total: z.string(),
-  free: z.string(),
-  used: z.string(),
+  total: z.number(),
+  free: z.number(),
+  used: z.number(),
   usedPercentage: z.number(),
 });
 

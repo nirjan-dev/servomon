@@ -138,18 +138,18 @@ async function getDiskStats(): Promise<DiskInfo[]> {
     disk.fs.startsWith("/dev"),
   );
 
-  function formatDiskSize(size: number) {
-    return `${(size / 1024 / 1024 / 1024).toFixed(1)} GBs`;
+  function getDiskSizeInGB(size: number) {
+    return Number((size / 1024 / 1024 / 1024).toFixed(1));
   }
 
   const diskStats: DiskInfo[] = onlyPhysicalRawDiskStats.map((disk) => {
     return {
       device: disk.fs,
       mountPoint: disk.mount,
-      free: formatDiskSize(disk.available),
-      total: formatDiskSize(disk.size),
-      used: formatDiskSize(disk.used),
-      usedPercentage: Number(disk.use.toFixed(1)),
+      free: getDiskSizeInGB(disk.available),
+      total: getDiskSizeInGB(disk.size),
+      used: getDiskSizeInGB(disk.used),
+      usedPercentage: Number(disk.use.toFixed(0)),
     };
   });
 
