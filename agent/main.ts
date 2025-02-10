@@ -9,6 +9,7 @@ import type {
   DiskInfo,
   ContainerInfo,
   NetworkInfo,
+  SystemInfo,
 } from "../shared/types.ts";
 import {
   battery,
@@ -16,6 +17,7 @@ import {
   dockerContainers,
   dockerContainerStats,
   fsSize,
+  get,
   mem,
   networkInterfaceDefault,
   networkStats,
@@ -87,6 +89,22 @@ async function getBatteryStats(): Promise<BatteryInfo> {
     charge: percent,
   };
 }
+
+async function getSystemInfo():Promise<SystemInfo> {
+  const {osInfo, system} = await get({
+    osInfo:'platform, distro, release, kernel',
+    system: 'version',
+  })
+  const combinedSystemInfo:SystemInfo = {
+    os: `${osInfo?.platform} ${osInfo?.distro} ${osInfo?.release}`,
+    kernel: osInfo?.kernel,
+    device: system?.version
+  }
+  console.log({combinedSystemInfo})
+  return combinedSystemInfo
+}
+
+await getSystemInfo()
 
 async function getCPUStats(): Promise<CpuInfo> {
   const { currentLoad: cpuLoad, cpus } = await currentLoad();
@@ -189,6 +207,7 @@ async function getMetrics(): Promise<Metrics> {
     disk: await getDiskStats(),
     containersInfo: await getContainersInfo(),
     networkInfo: await getNetworkStats(),
+    systemInfo: await getSystemInfo()
   };
 }
 

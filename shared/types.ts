@@ -5,6 +5,12 @@ export interface ProcessInfo {
   memoryPercent: string;
 }
 
+export interface SystemInfo {
+  os: string;
+  kernel: string;
+  device: string;
+}
+
 export interface DiskInfo {
   device: string;
   mountPoint: string;
@@ -58,6 +64,7 @@ export interface Metrics {
   battery: BatteryInfo;
   containersInfo: ContainerInfo[];
   networkInfo: NetworkInfo;
+  systemInfo: SystemInfo;
 }
 
 // Command Types

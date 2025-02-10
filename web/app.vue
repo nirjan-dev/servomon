@@ -3,7 +3,10 @@
   <UContainer>
     <MetricsTitle />
     <div class="flex items-start gap-2 flex-wrap">
-      <UpdateTime :update-time="metrics[0]?.timestamp" />
+      <SystemInfo
+        :timestamp="metrics[0]?.timestamp"
+        :system-info="systemInfo"
+      />
       <MemoryOverview
         v-if="memoryStats.at(-1)"
         :memoryMetrics="memoryStats.at(-1)!"
@@ -108,7 +111,9 @@ const memoryStats = computed(() => {
     };
   });
 });
-
+const systemInfo = computed(() => {
+  return metrics.value[0].systemInfo;
+});
 const networkStats = computed(() => {
   return metrics.value.map((metricsItem) => {
     return {

@@ -8,6 +8,12 @@ export const processInfoSchema = z.object({
   memoryPercent: z.string(),
 });
 
+export const systemInfoSchema = z.object({
+  os: z.string(),
+  kernel: z.string(),
+  device: z.string(),
+});
+
 export const diskInfoSchema = z.object({
   device: z.string(),
   mountPoint: z.string(),
@@ -61,6 +67,7 @@ export const metricsSchema = z.object({
   battery: batteryInfoSchema,
   containersInfo: z.array(containerInfoSchema),
   networkInfo: networkInfoSchema,
+  systemInfo: systemInfoSchema,
 });
 
 export const commandTypeSchema = z.union([
