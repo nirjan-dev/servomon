@@ -11,7 +11,7 @@ defineProps<{
 </script>
 
 <template>
-  <UCard class="max-w-fit min-w-52">
+  <UCard class="min-w-52">
     <template #header>Memory Overview</template>
     <h2 class="flex justify-between items-center gap-6">
       Used

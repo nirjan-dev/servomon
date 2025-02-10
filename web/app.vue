@@ -2,7 +2,9 @@
   <VitePwaManifest />
   <UContainer>
     <MetricsTitle />
-    <div class="flex items-start gap-2 flex-wrap">
+    <div
+      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-wrap mb-12"
+    >
       <SystemInfo
         :timestamp="metrics[0]?.timestamp"
         :system-info="systemInfo"
@@ -12,18 +14,19 @@
         :memoryMetrics="memoryStats.at(-1)!"
       />
 
-      <MemoryMetrics :memory-metrics="memoryStats" />
-      <StorageMetrics :storage-metrics="diskStats" />
       <NetworkOverview
         v-if="networkStats.at(-1)"
         :network-metrics="networkStats.at(-1)!"
       />
+      <MemoryMetrics :memory-metrics="memoryStats" />
+      <StorageMetrics :storage-metrics="diskStats" />
+
       <CPUUsage :cpu-metrics="cpuStats" />
     </div>
     <div class="grid gap-2">
       <UCard v-if="dockerStats.length">
         <template #header>
-          <h2 class="inline-block mr-2">Top Containers</h2>
+          <h2 class="inline-block mr-2">Containers</h2>
           <div class="inline-flex gap-2">
             <UButton color="red" @click="executeDockerCommand('stop')"
               >Stop</UButton
@@ -112,7 +115,7 @@ const memoryStats = computed(() => {
   });
 });
 const systemInfo = computed(() => {
-  return metrics.value[0].systemInfo;
+  return metrics.value[0]?.systemInfo;
 });
 const networkStats = computed(() => {
   return metrics.value.map((metricsItem) => {
@@ -195,23 +198,23 @@ const containersColumns = [
   },
   {
     key: "name",
-    label: "name",
+    label: "Name",
   },
   {
     key: "state",
-    label: "state",
+    label: "State",
   },
   {
     key: "cpu",
-    label: "cpu",
+    label: "CPU",
   },
   {
     key: "memory",
-    label: "memory",
+    label: "Memory",
   },
   {
     key: "memory %",
-    label: "memory %",
+    label: "Memory %",
   },
 ];
 

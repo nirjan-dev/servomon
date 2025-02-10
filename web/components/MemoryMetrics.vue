@@ -18,7 +18,7 @@ const totalMemory = computed(() => props.memoryMetrics[0]?.total ?? 0);
     <template #header>Memory Usage</template>
     <VisXYContainer :data="memoryMetrics" :yDomain="[0, totalMemory]">
       <VisArea
-        color="tomato"
+        color="#ef4444"
         :x="(d: MemoryMetric) => d.timestamp"
         :y="(d: MemoryMetric) => d.used"
       />

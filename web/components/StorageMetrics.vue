@@ -16,7 +16,7 @@
         />
         <VisAxis :tickLine="undefined" :gridLine="false" type="y" />
         <VisStackedBar
-          :color="['tomato', '#22c55e']"
+          :color="['#ef4444', '#22c55e']"
           :x="(_d: DiskMetrics) => index"
           :y="[(d: DiskMetrics) => d.free, (d: DiskMetrics) => d.used]"
         />

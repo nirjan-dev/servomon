@@ -4,7 +4,7 @@
 
     <VisXYContainer :data="cpuMetrics" :yDomain="[0, 100]">
       <VisArea
-        color="tomato"
+        color="#ef4444"
         :x="(d: CPUMetric) => d.timestamp"
         :y="(d: CPUMetric) => d.used"
       />

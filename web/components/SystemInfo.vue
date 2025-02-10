@@ -1,5 +1,5 @@
 <template>
-  <UCard class="max-w-fit min-w-96">
+  <UCard>
     <template #header><h2>System info</h2></template>
     <h2 class="flex justify-between items-center">
       Updated at
