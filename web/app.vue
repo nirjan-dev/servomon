@@ -23,41 +23,39 @@
 
       <CPUUsage :cpu-metrics="cpuStats" />
     </div>
-    <div class="grid gap-2">
-      <UCard v-if="dockerStats.length">
-        <template #header>
-          <h2 class="inline-block mr-2">Containers</h2>
-          <div class="inline-flex gap-2">
-            <UButton color="red" @click="executeDockerCommand('stop')"
-              >Stop</UButton
-            >
-            <UButton color="yellow" @click="executeDockerCommand('pause')"
-              >Pause</UButton
-            >
-            <UButton color="green" @click="executeDockerCommand('unpause')"
-              >Unpause</UButton
-            >
-          </div>
-        </template>
-        <UTable
-          v-model="selectedContainers"
-          :rows="dockerStats"
-          :columns="containersColumns"
-        />
-      </UCard>
+    <UCard class="mb-4" v-if="dockerStats.length">
+      <template #header>
+        <h2 class="inline-block mr-2">Containers</h2>
+        <div class="inline-flex gap-2">
+          <UButton color="red" @click="executeDockerCommand('stop')"
+            >Stop</UButton
+          >
+          <UButton color="yellow" @click="executeDockerCommand('pause')"
+            >Pause</UButton
+          >
+          <UButton color="green" @click="executeDockerCommand('unpause')"
+            >Unpause</UButton
+          >
+        </div>
+      </template>
+      <UTable
+        v-model="selectedContainers"
+        :rows="dockerStats"
+        :columns="containersColumns"
+      />
+    </UCard>
 
-      <UCard>
-        <template #header>
-          <h2 class="inline-block mr-2">Top Processes</h2>
-          <UButton color="red" @click="killSelectedProcesses">Kill</UButton>
-        </template>
-        <UTable
-          :columns="processTableColumns"
-          v-model="selectedProcesses"
-          :rows="processesStats"
-        />
-      </UCard>
-    </div>
+    <UCard class="mb-4">
+      <template #header>
+        <h2 class="inline-block mr-2">Top Processes</h2>
+        <UButton color="red" @click="killSelectedProcesses">Kill</UButton>
+      </template>
+      <UTable
+        :columns="processTableColumns"
+        v-model="selectedProcesses"
+        :rows="processesStats"
+      />
+    </UCard>
     <UNotifications />
   </UContainer>
 </template>
@@ -199,6 +197,8 @@ const containersColumns = [
   {
     key: "name",
     label: "Name",
+    class: "sticky z-10 bg-gray-900 left-0",
+    rowClass: "sticky z-10 bg-gray-900 left-0 truncate max-w-[25ch]",
   },
   {
     key: "state",

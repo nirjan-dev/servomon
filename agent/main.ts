@@ -100,7 +100,6 @@ async function getSystemInfo():Promise<SystemInfo> {
     kernel: osInfo?.kernel,
     device: system?.version
   }
-  console.log({combinedSystemInfo})
   return combinedSystemInfo
 }
 
