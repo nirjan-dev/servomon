@@ -15,7 +15,9 @@ const totalMemory = computed(() => props.memoryMetrics[0]?.total ?? 0);
 
 <template>
   <UCard>
-    <template #header>Memory Usage</template>
+    <template #header
+      >Memory Usage ({{ memoryMetrics.at(-1)?.usedPercent }}%)</template
+    >
     <VisXYContainer :data="memoryMetrics" :yDomain="[0, totalMemory]">
       <VisArea
         color="#ef4444"

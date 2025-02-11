@@ -31,10 +31,10 @@ const version = denoJSON.version;
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
 const SERVER_URL = Deno.env.get("SERVER_URL");
 const REQUESTS_PER_MINUTE_UNIT =
-  Number(Deno.env.get("REQUESTS_PER_MINUTE_UNIT")) ?? 5;
+  Number(Deno.env.get("REQUESTS_PER_MINUTE_UNIT")) || 5;
 const MINUTE_UNIT = Number(Deno.env.get("MINUTE_UNIT"));
 const AGENT_TOKEN = Deno.env.get("AGENT_TOKEN");
-const PORT = Number(Deno.env.get("PORT")) ?? 8000;
+const PORT = Number(Deno.env.get("PORT")) || 8000;
 if (!AGENT_TOKEN) {
   throw new Error("No AGENT_TOKEN set in env variables. Exiting agent...");
 }
@@ -93,12 +93,12 @@ async function getBatteryStats(): Promise<BatteryInfo> {
 async function getSystemInfo():Promise<SystemInfo> {
   const {osInfo, system} = await get({
     osInfo:'platform, distro, release, kernel',
-    system: 'version',
+    system: 'model, manufacturer, version',
   })
   const combinedSystemInfo:SystemInfo = {
     os: `${osInfo?.platform} ${osInfo?.distro} ${osInfo?.release}`,
     kernel: osInfo?.kernel,
-    device: system?.version
+    device: system?.version || system?.model || system?.manufacturer
   }
   return combinedSystemInfo
 }

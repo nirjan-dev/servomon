@@ -1,6 +1,6 @@
 <template>
   <UCard>
-    <template #header> CPU Usage (in %)</template>
+    <template #header> CPU Usage ({{ cpuMetrics.at(-1)?.used }}%)</template>
 
     <VisXYContainer :data="cpuMetrics" :yDomain="[0, 100]">
       <VisArea
