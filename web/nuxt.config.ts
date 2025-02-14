@@ -8,7 +8,8 @@ export default defineNuxtConfig({
         driver: "memory",
       },
       pushSubs: {
-        driver: "memory",
+        driver: "fs",
+        base: "./data/pushSubs",
       },
     },
     experimental: {
