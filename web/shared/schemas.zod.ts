@@ -60,6 +60,7 @@ export const networkInfoSchema = z.object({
 
 export const metricsSchema = z.object({
   timestamp: z.number(),
+  name: z.string(),
   memory: memoryInfoSchema,
   cpu: cpuInfoSchema,
   processes: z.array(processInfoSchema),

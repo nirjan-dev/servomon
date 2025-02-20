@@ -5,11 +5,16 @@ export default defineNuxtConfig({
   nitro: {
     storage: {
       metrics: {
-        driver: "memory",
+        driver: "fs",
+        base: "./data/metrics",
       },
       pushSubs: {
         driver: "fs",
         base: "./data/pushSubs",
+      },
+      serverState: {
+        driver: "fs",
+        base: "./data/serverState",
       },
     },
     experimental: {

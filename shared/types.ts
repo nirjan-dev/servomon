@@ -57,6 +57,7 @@ export interface NetworkInfo {
 
 export interface Metrics {
   timestamp: number;
+  name: string;
   memory: MemoryInfo;
   cpu: CpuInfo;
   processes: ProcessInfo[];
