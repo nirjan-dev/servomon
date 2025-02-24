@@ -37,7 +37,6 @@ export class CommandExecutorWebsocketClient extends WebsocketClient {
   }
 
   private sendOutputNotification(result: CommandResult) {
-    debugger;
     let message;
 
     switch (result.type) {

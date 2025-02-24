@@ -48,7 +48,7 @@ const props = defineProps<{
 
 const rows = computed(() => {
   return {
-    "Last Update": new Date(props.metrics.timestamp).toLocaleTimeString(),
+    "Last Update": new Date(props.metrics.timestamp).toLocaleString(),
     OS: props.metrics.systemInfo.os,
     Device: props.metrics.systemInfo.device,
     Battery: props.metrics.battery.charge,

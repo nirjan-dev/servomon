@@ -1,6 +1,6 @@
 export interface ProcessInfo {
   app: string;
-  pid: number;
+  pid: number | null;
   cpuPercent: string;
   memoryPercent: string;
 }

@@ -295,10 +295,11 @@ setInterval(async () => {
     });
     const parsedResponse = await response.json();
     if (parsedResponse?.statusCode !== 201) {
-      throw new Error(`Error sending metrics ` + parsedResponse?.statusMessage);
+      throw new Error(`Error sending metrics ` + parsedResponse?.statusMessage + JSON.stringify(parsedResponse?.data, null, 2));
     }
-  } catch (error) {
-    console.error(error);
+  } catch (error:unknown) {
+    console.log(error)
+    console.log('tried sending: ', JSON.stringify(metrics, null, 2))
   }
 }, requestIntervalMilliSeconds);
 

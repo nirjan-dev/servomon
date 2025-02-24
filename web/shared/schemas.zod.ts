@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const processInfoSchema = z.object({
   app: z.string(),
-  pid: z.number(),
+  pid: z.number().nullable(),
   cpuPercent: z.string(),
   memoryPercent: z.string(),
 });

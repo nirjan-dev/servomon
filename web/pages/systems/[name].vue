@@ -65,7 +65,7 @@ import {
   type ContainerInfo,
   type Metrics,
   type ProcessInfo,
-} from "../shared/types";
+} from "@global-shared/types";
 import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebsocketClient";
 const metrics = ref<Metrics[]>([]);
 const selectedProcesses = ref<typeof processesStats.value>([]);
@@ -342,17 +342,23 @@ function setupMetricsStream() {
 
     metrics.value = newMetrics;
 
-    if (!selectedProcesses.value.length) {
-      rawProcessStats.value = metrics.value[0].processes;
+    if (!selectedProcesses.value.length && metrics.value.at(-1)?.processes) {
+      rawProcessStats.value = metrics.value.at(-1)!.processes;
     }
 
-    if (!selectedContainers.value.length) {
-      rawDockerStats.value = metrics.value[0].containersInfo;
+    if (
+      !selectedContainers.value.length &&
+      metrics.value.at(-1)?.containersInfo
+    ) {
+      rawDockerStats.value = metrics.value.at(-1)!.containersInfo;
     }
   };
 }
 
 async function setupWebsocket() {
+  if (ws) {
+    return;
+  }
   ws = new CommandExecutorWebsocketClient({
     url: "/api/ws",
   });
@@ -393,4 +399,8 @@ function executeDockerCommand(action: "pause" | "unpause" | "stop") {
 
   selectedContainers.value = [];
 }
+
+onBeforeUnmount(async () => {
+  ws.disconnect();
+});
 </script>

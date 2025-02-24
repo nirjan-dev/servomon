@@ -28,10 +28,12 @@ export default defineWebSocketHandler({
 
     const serverPeer = serverPeers.get(serverPeerName ?? "");
 
-    if (peer.id !== serverPeer?.id) {
-      serverPeer?.send(JSON.stringify(message.json()));
+    const messageForServer = serverPeer && peer.id !== serverPeer.id;
+
+    if (messageForServer) {
+      serverPeer?.send(JSON.stringify(messageJSON));
     } else {
-      clients.forEach((client) => client.send(JSON.stringify(message.json())));
+      clients.forEach((client) => client.send(JSON.stringify(messageJSON)));
     }
   },
 
