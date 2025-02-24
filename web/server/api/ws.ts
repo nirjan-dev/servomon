@@ -2,18 +2,18 @@ type Peer = Parameters<
   NonNullable<Parameters<typeof defineWebSocketHandler>[0]["open"]>
 >[0];
 
-let serverPeer: Peer | undefined;
+let serverPeers: Map<string, Peer | undefined> = new Map();
 let clients: Peer[] = [];
 
 export default defineWebSocketHandler({
   open(peer) {
     const url = new URL(peer.request?.url || "");
     const type = url.searchParams.get("type") ?? "client";
+    const name = url.searchParams.get("name") ?? "unknown server";
 
     if (type === "server") {
-      serverPeer = peer;
-
-      console.log("adding server Peer", serverPeer?.id);
+      serverPeers.set(name, peer);
+      console.log("adding server Peer", peer.id);
     } else {
       clients.push(peer);
     }
@@ -22,25 +22,29 @@ export default defineWebSocketHandler({
   },
 
   message(peer, message) {
-    console.log(peer.id, " sent message ", message.json());
-    if (!serverPeer) {
-      console.log("no server connected");
-      return;
-    }
+    const messageJSON = message.json<{ system?: string }>();
+    console.log(peer.id, " sent message ", messageJSON);
+    const serverPeerName = messageJSON.system;
 
-    if (peer.id !== serverPeer.id) {
-      serverPeer.send(JSON.stringify(message.json()));
+    const serverPeer = serverPeers.get(serverPeerName ?? "");
+
+    const messageForServer = serverPeer && peer.id !== serverPeer.id;
+
+    if (messageForServer) {
+      serverPeer?.send(JSON.stringify(messageJSON));
     } else {
-      clients.forEach((client) => client.send(JSON.stringify(message.json())));
+      clients.forEach((client) => client.send(JSON.stringify(messageJSON)));
     }
   },
 
   close(peer) {
     console.log(peer.id, " got disconnected");
 
-    if (peer.id === serverPeer?.id) {
-      console.log("disconnecting server peer ", serverPeer.id);
-      serverPeer = undefined;
+    for (const [serverPeerName, serverPeer] of serverPeers) {
+      if (peer.id === serverPeer?.id) {
+        console.log("disconnecting server peer ", serverPeer.id);
+        serverPeers.delete(serverPeerName);
+      }
     }
 
     clients = clients.filter((c) => !c.id);

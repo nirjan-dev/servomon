@@ -7,7 +7,7 @@ export class CommandExecutorWebsocketClient extends WebsocketClient {
     super(config);
   }
 
-  public executeCommand(command: Command) {
+  public executeCommand(command: Command & { system: string }) {
     console.log("executing command...", command);
     this.send(JSON.stringify(command));
   }

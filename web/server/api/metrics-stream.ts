@@ -1,12 +1,13 @@
-export default defineEventHandler(async (event) => {
+export default defineEventHandler((event) => {
+  const { name } = getQuery(event);
   const metricsStream = createEventStream(event);
 
   const interval = setInterval(async () => {
-    const metricsKeys = await useStorage("metrics").getKeys();
+    const metricsKeys = await useStorage(`metrics/${name}`).getKeys();
 
     const metrics = await Promise.all(
       metricsKeys.map(async (metricKey) => {
-        return await useStorage("metrics").getItem(metricKey);
+        return await useStorage(`metrics/${name}`).getItem(metricKey);
       })
     );
     metricsStream.push(JSON.stringify(metrics));

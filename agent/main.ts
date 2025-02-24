@@ -35,6 +35,7 @@ const REQUESTS_PER_MINUTE_UNIT =
 const MINUTE_UNIT = Number(Deno.env.get("MINUTE_UNIT"));
 const AGENT_TOKEN = Deno.env.get("AGENT_TOKEN");
 const PORT = Number(Deno.env.get("PORT")) || 8000;
+const NAME = Deno.env.get("NAME") ?? 'no name configured'
 if (!AGENT_TOKEN) {
   throw new Error("No AGENT_TOKEN set in env variables. Exiting agent...");
 }
@@ -64,6 +65,7 @@ console.log(
 console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
 console.log(`SERVER_URL: ${SERVER_URL}`);
 console.log(`PORT: ${PORT}`);
+console.log(`NAME: ${NAME}`)
 
 async function getMemoryStats(): Promise<MemoryInfo> {
   const { total, available, active } = await mem();
@@ -196,6 +198,7 @@ async function getContainersInfo(): Promise<ContainerInfo[]> {
 
 async function getMetrics(): Promise<Metrics> {
   return {
+    name: NAME,
     timestamp: Date.now(),
     memory: await getMemoryStats(),
     battery: await getBatteryStats(),
@@ -292,10 +295,11 @@ setInterval(async () => {
     });
     const parsedResponse = await response.json();
     if (parsedResponse?.statusCode !== 201) {
-      throw new Error(`Error sending metrics ` + parsedResponse?.statusMessage);
+      throw new Error(`Error sending metrics ` + parsedResponse?.statusMessage + JSON.stringify(parsedResponse?.data, null, 2));
     }
-  } catch (error) {
-    console.error(error);
+  } catch (error:unknown) {
+    console.log(error)
+    console.log('tried sending: ', JSON.stringify(metrics, null, 2))
   }
 }, requestIntervalMilliSeconds);
 
@@ -311,7 +315,7 @@ async function handler(_req: Request): Promise<Response> {
 }
 
 const ws = new CommandResponderWebsocketClient({
-  url: `${SERVER_URL}/api/ws?type=server`,
+  url: `${SERVER_URL}/api/ws?type=server&name=${NAME}`,
 });
 
 ws.connect();

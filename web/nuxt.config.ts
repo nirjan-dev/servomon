@@ -1,15 +1,23 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   devtools: { enabled: true },
+  alias: {
+    "@global-shared/*": "../../shared/*",
+  },
   ssr: false,
   nitro: {
     storage: {
       metrics: {
-        driver: "memory",
+        driver: "fs",
+        base: "./data/metrics",
       },
       pushSubs: {
         driver: "fs",
         base: "./data/pushSubs",
+      },
+      serverState: {
+        driver: "fs",
+        base: "./data/serverState",
       },
     },
     experimental: {

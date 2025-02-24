@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const processInfoSchema = z.object({
   app: z.string(),
-  pid: z.number(),
+  pid: z.number().nullable(),
   cpuPercent: z.string(),
   memoryPercent: z.string(),
 });
@@ -60,6 +60,7 @@ export const networkInfoSchema = z.object({
 
 export const metricsSchema = z.object({
   timestamp: z.number(),
+  name: z.string(),
   memory: memoryInfoSchema,
   cpu: cpuInfoSchema,
   processes: z.array(processInfoSchema),
