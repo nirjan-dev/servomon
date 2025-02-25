@@ -1,9 +1,18 @@
 <template>
   <UCard>
     <template #header
-      ><div class="flex justify-between">
+      ><div class="flex flex-wrap justify-between">
         <span class="capitalize"> {{ name }}</span>
-        <UButton :to="link">View Details</UButton>
+        <div class="flex items-center gap-4 flex-wrap">
+          <span class="flex items-center gap-1">
+            Alerts
+            <UToggle
+              @change="(value) => $emit('changeAlertToggle', value)"
+              v-model="enableAlert"
+            />
+          </span>
+          <UButton :to="link">View Details</UButton>
+        </div>
       </div>
     </template>
 
@@ -20,9 +29,14 @@
 </template>
 
 <script lang="ts" setup>
+const emits = defineEmits<{
+  (e: "changeAlertToggle", value: boolean): void;
+}>();
+
 const props = defineProps<{
   name: string;
   link: string;
+  enableAlert?: boolean;
   metrics: {
     timestamp: number;
     memory: {
@@ -45,6 +59,8 @@ const props = defineProps<{
     };
   };
 }>();
+
+const enableAlert = ref(props.enableAlert ?? true);
 
 const rows = computed(() => {
   return {

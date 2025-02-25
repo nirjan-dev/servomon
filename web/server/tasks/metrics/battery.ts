@@ -37,6 +37,7 @@ async function batteryCheckForSystem(system: string) {
   runTask("server:send-alert", {
     payload: {
       message: `Warning: Battery % lower than ${batteryAlertThreshold}% for ${system}`,
+      system,
     },
   });
 }

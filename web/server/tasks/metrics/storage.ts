@@ -34,6 +34,7 @@ async function checkStorageForSystem(system: string) {
       runTask("server:send-alert", {
         payload: {
           message: `Warning: Disk used % greater than ${storageAlertThreshold}% for ${diskStats.mountPoint}`,
+          system,
         },
       });
     }

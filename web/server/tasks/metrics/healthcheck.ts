@@ -65,6 +65,7 @@ async function healthCheckForSystem(system: string) {
       runTask("server:send-alert", {
         payload: {
           message: `No new metrics found, ${system} might be down`,
+          system,
         },
       });
     }
@@ -77,6 +78,7 @@ async function healthCheckForSystem(system: string) {
       runTask("server:send-alert", {
         payload: {
           message: `Metrics coming in again, ${system} might be up again`,
+          system,
         },
       });
     }

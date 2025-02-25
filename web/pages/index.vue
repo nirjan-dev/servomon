@@ -10,7 +10,11 @@
           v-if="systemMetricsStreams[system]?.at(-1)"
           :name="system"
           :link="`/systems/${system}`"
+          :enable-alert="systemConfigs[system]?.enableAlerts"
           :metrics="systemMetricsStreams[system].at(-1)!"
+          @change-alert-toggle="
+            (value) => handleAlertToggleChange(value, system)
+          "
         />
         <USkeleton class="h-60 w-full" v-else />
       </div>
@@ -25,7 +29,14 @@ import type { Metrics } from "../../shared/types";
 const isLoading = ref(false);
 
 const systems = ref([]);
-
+const systemConfigs = ref<
+  Record<
+    string,
+    {
+      enableAlerts: boolean;
+    }
+  >
+>({});
 const systemMetricsStreams = reactive<Record<string, Metrics[]>>({});
 
 function setupMetricsStream() {
@@ -44,10 +55,18 @@ async function loadSystems() {
   systems.value = (await $fetch("/api/sytems")) ?? [];
 }
 
+async function loadSystemConfigs() {
+  const savedSystemConfigs = await $fetch("/api/system-configs");
+
+  if (savedSystemConfigs) {
+    systemConfigs.value = savedSystemConfigs;
+  }
+}
+
 onMounted(async () => {
   try {
     isLoading.value = true;
-    await loadSystems();
+    await Promise.allSettled([loadSystems(), loadSystemConfigs()]);
     setupMetricsStream();
   } catch (error) {
     console.log({ error });
@@ -55,6 +74,28 @@ onMounted(async () => {
     isLoading.value = false;
   }
 });
+
+async function handleAlertToggleChange(value: boolean, system: string) {
+  try {
+    await $fetch("/api/system-config", {
+      method: "PUT",
+      body: {
+        system,
+        enableAlerts: value,
+      },
+    });
+    useToast().add({
+      title: "Successfully updated system alert config",
+      color: "green",
+    });
+  } catch (error) {
+    console.log({ error });
+    useToast().add({
+      title: "Error updating system alert config",
+      color: "red",
+    });
+  }
+}
 </script>
 
 <style></style>

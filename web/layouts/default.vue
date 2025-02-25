@@ -1,7 +1,10 @@
 <template>
+  <VitePwaManifest />
   <UContainer>
     <MetricsTitle />
     <slot />
+
+    <UNotifications />
   </UContainer>
 </template>
 

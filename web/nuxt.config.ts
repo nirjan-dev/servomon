@@ -19,6 +19,10 @@ export default defineNuxtConfig({
         driver: "fs",
         base: "./data/serverState",
       },
+      systemConfigs: {
+        driver: "fs",
+        base: "./data/systemConfigs",
+      },
     },
     experimental: {
       tasks: true,

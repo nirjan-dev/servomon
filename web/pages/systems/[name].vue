@@ -1,5 +1,4 @@
 <template>
-  <VitePwaManifest />
   <UBreadcrumb :links="breadcrumbLinks" />
 
   <div
@@ -57,7 +56,6 @@
       :rows="processesStats"
     />
   </UCard>
-  <UNotifications />
 </template>
 
 <script setup lang="ts">

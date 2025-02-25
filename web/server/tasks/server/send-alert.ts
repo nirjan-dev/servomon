@@ -6,8 +6,20 @@ export default defineTask({
     name: "server:send-alert",
     description: "Send alert when no metrics are available",
   },
-  async run({ payload: { message } }) {
+  async run({ payload: { message, system } }) {
     let alertMessage: string = (message as string) ?? "alert message not sent";
+
+    const systemConfig = await $fetch("/api/system-config", {
+      params: {
+        system,
+      },
+    });
+
+    if (systemConfig?.enableAlerts === false) {
+      console.log("skipped alert because alerts disabled for " + system);
+      return {};
+    }
+
     console.log("sending alert with message: ", alertMessage);
     try {
       await Promise.allSettled([
