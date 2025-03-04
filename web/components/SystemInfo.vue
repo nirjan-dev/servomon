@@ -1,19 +1,19 @@
 <template>
   <UCard>
-    <template #header><h2>System info</h2></template>
+    <template #header><h2>System Info</h2></template>
     <h2 class="flex justify-between items-center">
       Name
-      <span class="text-lg font-bold text-primary">{{ name }} </span>
+      <span class="capitalize font-bold text-primary">{{ name }} </span>
     </h2>
 
     <h2 class="flex justify-between items-center">
       Updated at
-      <span class="text-lg font-bold text-primary">{{ updateTime }} </span>
+      <span class="font-bold text-primary">{{ updateTime }} </span>
     </h2>
     <template v-if="systemInfo" v-for="(info, label) in systemInfo">
-      <h2 class="flex justify-between items-center">
+      <h2 class="mb-2 flex justify-between items-center">
         {{ label }}
-        <span class="text-lg font-bold">{{ info }} </span>
+        <span class="font-bold">{{ info }} </span>
       </h2>
     </template>
   </UCard>

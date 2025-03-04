@@ -13,7 +13,7 @@
 
 <script lang="ts" setup>
 defineProps<{
-  networkMetrics: {
+  networkMetrics?: {
     upload: string;
     download: string;
     uploadErrors: string;

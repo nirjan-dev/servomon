@@ -1,8 +1,8 @@
 <template>
   <UCard>
     <template #header
-      ><div class="flex flex-wrap justify-between">
-        <span class="capitalize"> {{ name }}</span>
+      ><div class="flex flex-wrap justify-between items-center">
+        <span class="capitalize font-bold text-primary"> {{ name }}</span>
         <div class="flex items-center gap-4 flex-wrap">
           <span class="flex items-center gap-1">
             Alerts
@@ -19,10 +19,12 @@
     <div>
       <h2
         v-for="(info, label) in rows"
-        class="flex justify-between items-center"
+        class="flex mb-1 justify-between items-center"
       >
-        {{ label }}
-        <span class="text-lg font-bold">{{ info }} </span>
+        <span class="text-sm">{{ label }}</span>
+        <span :title="info" class="text-base font-bold truncate max-w-36"
+          >{{ info }}
+        </span>
       </h2>
     </div>
   </UCard>
@@ -61,13 +63,19 @@ const props = defineProps<{
 }>();
 
 const enableAlert = ref(props.enableAlert ?? true);
-
+const formatter = new Intl.DateTimeFormat("en-Us", {
+  month: "short",
+  day: "2-digit",
+  hourCycle: "h12",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 const rows = computed(() => {
   return {
-    "Last Update": new Date(props.metrics.timestamp).toLocaleString(),
+    "Last Update": formatter.format(new Date(props.metrics.timestamp)),
     OS: props.metrics.systemInfo.os,
     Device: props.metrics.systemInfo.device,
-    Battery: props.metrics.battery.charge,
+    Battery: `${props.metrics.battery.charge}%`,
     "Memory Used": `${props.metrics.memory.usedPercentage}%`,
     "CPU Used": `${props.metrics.cpu.used}%`,
     "Active Containers": `${props.metrics.containersInfo.length}`,

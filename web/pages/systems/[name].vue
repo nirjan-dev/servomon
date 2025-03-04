@@ -1,61 +1,56 @@
 <template>
-  <UBreadcrumb :links="breadcrumbLinks" />
+  <UBreadcrumb :links="breadcrumbLinks" class="capitalize" />
 
-  <div
-    class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-wrap mt-6 mb-12"
-  >
-    <SystemInfo
-      :name="systemName"
-      :timestamp="metrics[0]?.timestamp"
-      :system-info="systemInfo"
-    />
-    <MemoryOverview
-      v-if="memoryStats.at(-1)"
-      :memoryMetrics="memoryStats.at(-1)!"
-    />
+  <USkeleton v-if="isLoadingMetrics" class="mt-6 w-full h-svh" />
 
-    <NetworkOverview
-      v-if="networkStats.at(-1)"
-      :network-metrics="networkStats.at(-1)!"
-    />
-    <MemoryMetrics :memory-metrics="memoryStats" />
-    <StorageMetrics :storage-metrics="diskStats" />
-
-    <CPUUsage :cpu-metrics="cpuStats" />
-  </div>
-  <UCard class="mb-4" v-if="dockerStats.length">
-    <template #header>
-      <h2 class="inline-block mr-2">Containers</h2>
-      <div class="inline-flex gap-2">
-        <UButton color="red" @click="executeDockerCommand('stop')"
-          >Stop</UButton
-        >
-        <UButton color="yellow" @click="executeDockerCommand('pause')"
-          >Pause</UButton
-        >
-        <UButton color="green" @click="executeDockerCommand('unpause')"
-          >Unpause</UButton
-        >
-      </div>
-    </template>
-    <UTable
-      v-model="selectedContainers"
-      :rows="dockerStats"
-      :columns="containersColumns"
-    />
-  </UCard>
-
-  <UCard class="mb-4">
-    <template #header>
-      <h2 class="inline-block mr-2">Top Processes</h2>
-      <UButton color="red" @click="killSelectedProcesses">Kill</UButton>
-    </template>
-    <UTable
-      :columns="processTableColumns"
-      v-model="selectedProcesses"
-      :rows="processesStats"
-    />
-  </UCard>
+  <template v-else>
+    <div
+      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-wrap mt-6 mb-12"
+    >
+      <SystemInfo
+        :name="systemName"
+        :timestamp="metrics[0]?.timestamp"
+        :system-info="systemInfo"
+      />
+      <MemoryOverview :memoryMetrics="memoryStats.at(-1)!" />
+      <NetworkOverview :network-metrics="networkStats.at(-1)!" />
+      <MemoryMetrics :memory-metrics="memoryStats" />
+      <StorageMetrics :storage-metrics="diskStats" />
+      <CPUUsage :cpu-metrics="cpuStats" />
+    </div>
+    <UCard class="mb-4" v-if="dockerStats.length">
+      <template #header>
+        <h2 class="inline-block mr-2">Containers</h2>
+        <div class="inline-flex gap-2">
+          <UButton color="red" @click="executeDockerCommand('stop')"
+            >Stop</UButton
+          >
+          <UButton color="yellow" @click="executeDockerCommand('pause')"
+            >Pause</UButton
+          >
+          <UButton color="green" @click="executeDockerCommand('unpause')"
+            >Unpause</UButton
+          >
+        </div>
+      </template>
+      <UTable
+        v-model="selectedContainers"
+        :rows="dockerStats"
+        :columns="containersColumns"
+      />
+    </UCard>
+    <UCard class="mb-4">
+      <template #header>
+        <h2 class="inline-block mr-2">Top Processes</h2>
+        <UButton color="red" @click="killSelectedProcesses">Kill</UButton>
+      </template>
+      <UTable
+        :columns="processTableColumns"
+        v-model="selectedProcesses"
+        :rows="processesStats"
+      />
+    </UCard>
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -69,6 +64,7 @@ const metrics = ref<Metrics[]>([]);
 const selectedProcesses = ref<typeof processesStats.value>([]);
 const selectedContainers = ref<typeof dockerStats.value>([]);
 const systemName = useRoute().params.name ?? "";
+const isLoadingMetrics = computed(() => metrics.value.length === 0);
 const breadcrumbLinks = [
   {
     label: "Home",
@@ -104,7 +100,6 @@ const processTableColumns = [
     label: "memory",
   },
 ];
-const toast = useToast();
 
 let ws: CommandExecutorWebsocketClient;
 
@@ -227,13 +222,6 @@ const containersColumns = [
     label: "Memory %",
   },
 ];
-
-const batteryCharge = computed(() => {
-  if (!metrics.value[0]) {
-    return "loading...";
-  }
-  return metrics.value[0].battery.charge + "%";
-});
 
 onMounted(async () => {
   setupMetricsStream();
