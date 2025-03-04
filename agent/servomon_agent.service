@@ -1,0 +1,12 @@
+[Unit]
+Description=servomon agent app that sends system data to the web app for monitoring
+
+[Service]
+Type=simple
+User=username
+WorkingDirectory=/home/userDirectory
+ExecStart=/path/to/binary/servomon-agent
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
