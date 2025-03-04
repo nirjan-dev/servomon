@@ -136,7 +136,9 @@ async function getProcessStats(): Promise<ProcessInfo[]> {
   );
 
   const processStats: ProcessInfo[] = processesWithLoad
-    .sort((a, b) => b.cpu - a.cpu)
+  .filter(p => p.pid)
+  .sort((a, b) => b.mem - a.mem)  
+  .sort((a, b) => b.cpu - a.cpu)
     .splice(0, Math.min(12, processesWithLoad.length))
     .map((process) => {
       return {
@@ -197,19 +199,29 @@ async function getContainersInfo(): Promise<ContainerInfo[]> {
 }
 
 async function getMetrics(): Promise<Metrics> {
+
+  const [memory, battery, cpu, processes, disk, containersInfo, networkInfo, systemInfo] = await Promise.all([
+    getMemoryStats(),
+    getBatteryStats(),
+    getCPUStats(),
+    getProcessStats(),
+    getDiskStats(),
+    getContainersInfo(),
+    getNetworkStats(),
+    getSystemInfo()
+  ])
+
   return {
     name: NAME,
     timestamp: Date.now(),
-    memory: await getMemoryStats(),
-    battery: await getBatteryStats(),
-
-    cpu: await getCPUStats(),
-
-    processes: await getProcessStats(),
-    disk: await getDiskStats(),
-    containersInfo: await getContainersInfo(),
-    networkInfo: await getNetworkStats(),
-    systemInfo: await getSystemInfo()
+    memory,
+    battery,
+    containersInfo,
+    cpu,
+    disk,
+    networkInfo,
+    processes,
+    systemInfo
   };
 }
 
