@@ -4,7 +4,7 @@ Description=servomon agent app that sends system data to the web app for monitor
 [Service]
 Type=simple
 User=username
-WorkingDirectory=/home/userDirectory
+WorkingDirectory=/path/to/binary-parent-folder
 ExecStart=/path/to/binary/servomon-agent
 Restart=always
 
