@@ -1,0 +1,11 @@
+services:
+  servomon-web:
+    volumes:
+      - ./data:/app/data
+    build:
+      dockerfile: "./Dockerfile"
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    restart: unless-stopped
