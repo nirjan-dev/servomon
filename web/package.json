@@ -10,7 +10,8 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "generate:schema": "ts-to-zod ../shared/types.ts ./shared/schemas.zod.ts && cp ./shared/schemas.zod.ts ../agent/schemas/",
-    "generate:pwa-assets": "pwa-assets-generator --preset minimal-2023 public/logo.svg"
+    "generate:pwa-assets": "pwa-assets-generator --preset minimal-2023 public/logo.svg",
+    "generate:vapid-keys": "npx web-push generate-vapid-keys"
   },
   "devDependencies": {
     "@flydotio/dockerfile": "^0.5.9",

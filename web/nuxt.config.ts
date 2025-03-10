@@ -93,15 +93,46 @@ export default defineNuxtConfig({
       theme_color: "#a3e635",
       screenshots: [
         {
-          src: "/mobile-screenshot.png",
-          sizes: "329x562",
+          src: "/screenshots/mobile-screenshot-1.png",
+          sizes: "428x926",
+          form_factor: "narrow",
+          label: "mobile view",
+        },
+
+        {
+          src: "/screenshots/mobile-screenshot-2.png",
+          sizes: "428x926",
           form_factor: "narrow",
           label: "mobile view",
         },
         {
-          src: "/desktop-screenshot.png",
+          src: "/screenshots/mobile-screenshot-3.png",
+          sizes: "428x926",
+          form_factor: "narrow",
+          label: "mobile view",
+        },
+        {
+          src: "/screenshots/mobile-screenshot-4.png",
+          sizes: "428x926",
+          form_factor: "narrow",
+          label: "mobile view",
+        },
+        {
+          src: "/screenshots/desktop-screenshot-1.png",
           form_factor: "wide",
-          sizes: "1200x568",
+          sizes: "1440x900",
+          label: "desktop view",
+        },
+        {
+          src: "/screenshots/desktop-screenshot-2.png",
+          form_factor: "wide",
+          sizes: "1440x900",
+          label: "desktop view",
+        },
+        {
+          src: "/screenshots/desktop-screenshot-3.png",
+          form_factor: "wide",
+          sizes: "1440x900",
           label: "desktop view",
         },
       ],
