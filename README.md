@@ -1,6 +1,6 @@
 # Servomon - Simple Home Server Monitoring
 
-Servomon helps you monitor Linux web servers through an easy-to-use web app. It consists of two parts:
+Servomon helps you monitor Linux servers through an easy-to-use web app. It consists of two parts:
 - A web app for viewing server metrics
 - An agent that runs on your servers to collect and send data
 
