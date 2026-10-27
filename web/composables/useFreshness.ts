@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref, type Ref } from "vue";
+import { computed, onMounted, onUnmounted, readonly, ref, type Ref } from "vue";
 
 // S2: client-side data freshness derived from the newest metric timestamp in
 // each SSE push. No new endpoint: the stream already delivers timestamps every
@@ -17,67 +17,70 @@ export const OFFLINE_AFTER_MS = 180_000;
 
 const TICK_MS = 10_000;
 
-function ageLabel(ageMs: number): string {
+// One clock shared by every freshness label on the page.
+const now = ref(Date.now());
+let subscribers = 0;
+let timer: ReturnType<typeof setInterval> | undefined;
+
+export function useNow(): Readonly<Ref<number>> {
+  onMounted(() => {
+    if (subscribers++ === 0) {
+      now.value = Date.now();
+      timer = setInterval(() => {
+        now.value = Date.now();
+      }, TICK_MS);
+    }
+  });
+  onUnmounted(() => {
+    if (--subscribers === 0) clearInterval(timer);
+  });
+  return readonly(now);
+}
+
+export function ageLabel(ageMs: number): string {
   const seconds = Math.floor(ageMs / 1000);
   if (seconds < 5) return "just now";
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function useFreshness(newestTimestamp: Ref<number | undefined>) {
-  const now = ref(Date.now());
-  let timer: ReturnType<typeof setInterval> | null = null;
+export function freshnessOf(ts: number | null | undefined, at: number): FreshnessState {
+  if (ts == null) return "unknown";
+  const age = at - ts;
+  // Future timestamps (clock skew) count as live, not offline.
+  if (age < STALE_AFTER_MS) return "live";
+  if (age < OFFLINE_AFTER_MS) return "stale";
+  return "offline";
+}
 
-  onMounted(() => {
-    timer = setInterval(() => {
-      now.value = Date.now();
-    }, TICK_MS);
-  });
+export function freshnessLabel(ts: number | null | undefined, at: number): string {
+  if (ts == null) return "Waiting for data";
+  const age = ageLabel(Math.max(0, at - ts));
+  switch (freshnessOf(ts, at)) {
+    case "live":
+      return `Live · ${age}`;
+    case "stale":
+      return `Stale · ${age}`;
+    default:
+      return `Offline · last update ${age}`;
+  }
+}
 
-  onUnmounted(() => {
-    clearInterval(timer);
-  });
+export const FRESHNESS_COLOR = {
+  live: "success",
+  stale: "warning",
+  offline: "error",
+  unknown: "neutral",
+} as const satisfies Record<FreshnessState, string>;
 
-  const state = computed<FreshnessState>(() => {
-    const ts = newestTimestamp.value;
-    if (ts === undefined) return "unknown";
-    const age = now.value - ts;
-    // Future timestamps (clock skew) count as live, not offline.
-    if (age < STALE_AFTER_MS) return "live";
-    if (age < OFFLINE_AFTER_MS) return "stale";
-    return "offline";
-  });
-
-  const label = computed(() => {
-    const ts = newestTimestamp.value;
-    if (ts === undefined) return "Waiting for data";
-    const age = Math.max(0, now.value - ts);
-    switch (state.value) {
-      case "live":
-        return `Live · ${ageLabel(age)}`;
-      case "stale":
-        return `Stale · ${ageLabel(age)}`;
-      case "offline":
-        return `Offline · last update ${ageLabel(age)}`;
-      default:
-        return "Waiting for data";
-    }
-  });
-
-  const dotClass = computed(() => {
-    switch (state.value) {
-      case "live":
-        return "bg-green-500";
-      case "stale":
-        return "bg-yellow-500";
-      case "offline":
-        return "bg-red-500";
-      default:
-        return "bg-neutral-500";
-    }
-  });
-
-  return { state, label, dotClass };
+export function useFreshness(newestTimestamp: Ref<number | null | undefined>) {
+  const clock = useNow();
+  const state = computed(() => freshnessOf(newestTimestamp.value, clock.value));
+  const label = computed(() => freshnessLabel(newestTimestamp.value, clock.value));
+  const color = computed(() => FRESHNESS_COLOR[state.value]);
+  return { state, label, color };
 }

@@ -11,6 +11,12 @@ importers:
 
   .:
     dependencies:
+      '@fontsource-variable/ibm-plex-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/ibm-plex-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@types/web-push':
         specifier: ^3.6.4
         version: 3.6.4
@@ -30,9 +36,6 @@ importers:
       '@flydotio/dockerfile':
         specifier: ^0.5.9
         version: 0.5.9
-      '@iconify-json/heroicons':
-        specifier: ^1.2.3
-        version: 1.2.3
       '@iconify-json/lucide':
         specifier: ^1.2.147
         version: 1.2.147
@@ -1094,8 +1097,11 @@ packages:
     engines: {node: '>=16.0.0'}
     hasBin: true
 
-  '@iconify-json/heroicons@1.2.3':
-    resolution: {integrity: sha512-n+vmCEgTesRsOpp5AB5ILB6srsgsYK+bieoQBNlafvoEhjVXLq8nIGN4B0v/s4DUfa0dOrjwE/cKJgIKdJXOEg==}
+  '@fontsource-variable/ibm-plex-sans@5.3.0':
+    resolution: {integrity: sha512-agG8tXFEo0hD9+J7npa4vbbWult52eMLVaQ6WQRlhs/iCAojrMAoejru85W9HTVXHfyUj96KM7gp/KGAS87XaQ==}
+
+  '@fontsource/ibm-plex-mono@5.3.0':
+    resolution: {integrity: sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q==}
 
   '@iconify-json/lucide@1.2.147':
     resolution: {integrity: sha512-7Qqa/joSBeUxihWsQJx5nKcqMWtV3YrH90Jldxcx4J9ciTLavRUlpexQwRTcx9dcb7CJpISfjZTj42zD/30sqA==}
@@ -7734,9 +7740,9 @@ snapshots:
       shell-quote: 1.8.2
       yargs: 17.7.2
 
-  '@iconify-json/heroicons@1.2.3':
-    dependencies:
-      '@iconify/types': 2.0.0
+  '@fontsource-variable/ibm-plex-sans@5.3.0': {}
+
+  '@fontsource/ibm-plex-mono@5.3.0': {}
 
   '@iconify-json/lucide@1.2.147':
     dependencies:

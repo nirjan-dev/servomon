@@ -26,9 +26,9 @@ Servomon helps you monitor Linux servers through an easy-to-use web app. It cons
   - Discord Alerts
   - Supports these alerts by default: low battery, low storage, and server downtime
 
-![Dashboard with live/stale system cards](./web/public/screenshots/desktop-dashboard.png)
-![System detail with charts and freshness badge](./web/public/screenshots/desktop-detail.png)
-![Mobile dashboard](./web/public/screenshots/mobile-dashboard.png)
+![Overview: every system with live status, CPU trend, memory, disk and network](./web/public/screenshots/desktop-dashboard.png)
+![System detail in dark mode: CPU, memory and network charts, storage, containers and processes](./web/public/screenshots/desktop-detail.png)
+![Overview on mobile](./web/public/screenshots/mobile-dashboard.png)
 
 ## Installation
 
@@ -63,14 +63,14 @@ The agent runs on Linux x86_64 (command execution shells out to `kill` and the `
 On first run (no `AGENT_TOKEN`), the agent prints a pairing code and waits:
 
 1. Open the dashboard and log in with your operator credentials.
-2. In the **Agents** section, find the pending request. Check the fingerprint matches what the agent printed.
+2. Open **Agents** (it shows a badge while requests are pending) and find the request. Check the fingerprint matches what the agent printed.
 3. Click **Approve**. The agent receives its token automatically and starts sending metrics.
 
 For the protocol walkthrough, diagrams, recovery behavior, and current security limits, see [Agent enrollment](docs/agent-enrollment.md). Token collection requires a device-only secret the agent generates at request time — the pairing code alone only identifies the request. The displayed fingerprint is a comparison label, not verified proof of private-key ownership.
 
-To remove an agent, click **Remove** next to it. Its token stops working immediately and its connection is closed. Pairing codes expire after 15 minutes; denied requests never receive a token.
+To remove an agent, click **Remove** next to it on the **Agents** page and confirm. Its token stops working immediately and its connection is closed. Pairing codes expire after 15 minutes; denied requests never receive a token.
 
-To fully delete a monitored system — its card on the dashboard, stored metrics, alert config, and enrollment — click **Delete** on its system card. This cannot be undone.
+To fully delete a monitored system — its row on the overview, stored metrics, alert config, and enrollment — open the row's **⋯** menu, choose **Delete system…** and confirm. This cannot be undone.
 
 To run in background:
 - Quick method: Press `Ctrl + Z`, then type `bg`

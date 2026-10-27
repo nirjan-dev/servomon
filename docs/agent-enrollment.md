@@ -100,7 +100,7 @@ sequenceDiagram
 
 If the same agent id already has a live pending request, matching `system` and `fingerprint` return its existing code. Different metadata for that pending id returns 409. The collector hash is bound on first submission and never rotated by re-requests, so replaying public metadata returns the code but never the collection secret.
 
-**Operator review.** `AgentsManager.vue` fetches pending requests and enrolled agents immediately, then every 15 seconds. Only an authenticated operator can list, approve, or deny pending requests. Approval and other unsafe operator calls require a same-origin request (browser `Origin` must match the host) or, without `Origin`, a JSON body — so a forged cross-site form post is rejected with 403. Compare the code shown by the terminal you started, not just a familiar hostname. A displayed fingerprint is not independently verified by the server.
+**Operator review.** The dashboard fetches pending requests and enrolled agents when it loads, then every 15 seconds on every page (`useFleet.ts`), so the **Agents** link in the sidebar shows a badge while requests are waiting. Only an authenticated operator can list, approve, or deny pending requests. Approval and other unsafe operator calls require a same-origin request (browser `Origin` must match the host) or, without `Origin`, a JSON body — so a forged cross-site form post is rejected with 403. Compare the code shown by the terminal you started, not just a familiar hostname. A displayed fingerprint is not independently verified by the server.
 
 **Approval.** The server looks up the pending code, checks its status and expiry, and under an approval lock checks that neither its system name nor its agent id is enrolled before persisting. It generates a fresh token, hashes it using scrypt with a random 16-byte salt and 32-byte output, and persists a record:
 
@@ -190,7 +190,7 @@ Protect both local files, and exclude them from source control and public suppor
 | Agent process restarted while still pending | The identity file is reused; a still-live matching pending request returns its original code without extending its deadline |
 | Server restarted while pending | Restart the agent to request a new code; the old code is unavailable |
 | Operator clicked Remove | Server revokes enrollment but does not alter local files; the agent must be re-enrolled manually to regain access |
-| System remains visible after Remove | Its metrics history is retained intentionally. Use Delete on the system card if that history should also be purged |
+| System remains visible after Remove | Its metrics history is retained intentionally. Use **Delete system…** in the system's **⋯** menu on the overview if that history should also be purged |
 
 Copying an enrolled agent's `.env` to another machine copies its authority. The keypair does not prevent cloning: either machine can authenticate using the same bearer token.
 
@@ -236,7 +236,7 @@ Fixed by this hardening pass: forged cross-site approval (same-origin/JSON gate)
 | [`web/server/api/enroll/`](../web/server/api/enroll/) | Request, pending list, locked approval, denial, secret-bound collection handlers |
 | [`web/server/utils/ticketStore.ts`](../web/server/utils/ticketStore.ts) | Pending enrollment records, code generation, collector-hash checks, expiry checks, and IP buckets; also stores the separate WebSocket tickets |
 | [`web/server/utils/agentStore.ts`](../web/server/utils/agentStore.ts) | Token generation and salted hashes, registry reads and writes, revocation |
-| [`web/components/AgentsManager.vue`](../web/components/AgentsManager.vue) | Pending review UI, approval/denial, enrolled list and Remove action |
+| [`web/pages/agents.vue`](../web/pages/agents.vue), [`web/composables/useFleet.ts`](../web/composables/useFleet.ts) | Pending review UI, approval/denial, enrolled list and Remove action; shared polling of pending requests and agents |
 | [`web/test/s1-auth.test.mjs`](../web/test/s1-auth.test.mjs) | HTTP/WebSocket regression coverage using synthetic enrollment records |
 
 The suite covers forged-form and foreign-origin rejection, device-secret collection binding, pending-name and agent-id uniqueness, concurrent-approval serialization, token-authenticated ingestion, cross-system ingestion rejection, and credential/socket revocation. It does not establish private-key proof, safe recovery after a lost response, or filesystem permission enforcement.

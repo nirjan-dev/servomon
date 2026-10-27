@@ -22,6 +22,9 @@ export class WebsocketClient {
   private maxReconnectAttempts: number = 20;
   private reconnectInterval: number = 1000;
   private reconnectTimeout?: ReturnType<typeof setTimeout>;
+  // Set by disconnect(). The close event fires after `ws` is cleared, so the
+  // socket's own state can't tell an intentional close from a dropped one.
+  private closedByClient = false;
   private callbacks: WebsocketCallbacks = {};
 
   constructor(config: WebsocketClientConfig) {
@@ -47,8 +50,11 @@ export class WebsocketClient {
       return;
     }
 
+    this.closedByClient = false;
     try {
       const url = this.resolveUrl ? await this.resolveUrl() : this.url;
+      // disconnect() may have run while the ticket was being minted.
+      if (this.closedByClient) return;
       this.ws = new WebSocket(url);
       this.setupEventListeners();
     } catch (error) {
@@ -90,7 +96,7 @@ export class WebsocketClient {
     this.cancelReconnect();
 
     // don't reconnect if intentionally closed
-    if (this.ws?.readyState === WebSocket.CLOSING) {
+    if (this.closedByClient) {
       return;
     }
 
@@ -127,6 +133,7 @@ export class WebsocketClient {
   }
 
   public disconnect(): void {
+    this.closedByClient = true;
     this.cancelReconnect();
     if (this.ws) {
       this.ws.close(1000, "Normal closure");

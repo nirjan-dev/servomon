@@ -41,10 +41,29 @@ export default defineNuxtConfig({
     },
   },
   modules: ["@nuxt/ui", "@kgierke/nuxt-basic-auth", "@vite-pwa/nuxt"],
-  css: ["~/assets/css/main.css"],
+  // Fonts are self-hosted from npm (fontsource): no build-time or runtime
+  // requests to font CDNs, so @nuxt/fonts is turned off.
+  ui: { fonts: false },
+  css: [
+    "@fontsource-variable/ibm-plex-sans",
+    "@fontsource/ibm-plex-mono/400.css",
+    "@fontsource/ibm-plex-mono/500.css",
+    "@fontsource/ibm-plex-mono/600.css",
+    "~/assets/css/main.css",
+  ],
   // With ssr off, icons missing from the client bundle are fetched from the
   // public Iconify API at runtime; scan the sources and bundle them instead.
   icon: { clientBundle: { scan: true } },
+  vite: {
+    build: {
+      // One stylesheet, linked from the HTML. With split CSS, a chunk's
+      // preload list names the entry stylesheet, but its content hash doesn't
+      // cover that name: after a CSS-only change the chunk keeps its URL
+      // (served immutable) while its content changes, so returning browsers
+      // run a cached copy that loads the previous build's stylesheet on top.
+      cssCodeSplit: false,
+    },
+  },
   compatibilityDate: "2024-12-30",
   runtimeConfig: {
     discordWebhookUrl: "",
@@ -99,53 +118,54 @@ export default defineNuxtConfig({
     manifest: {
       name: "Servomon - Simple Home Server Monitoring",
       short_name: "Servomon",
-      background_color: "#121212",
+      // Splash: the dark UI background (ink-950). Title bar: the logo's slate.
+      background_color: "#080d12",
       description:
         "Monitor your home server metrics easily with the servomon web app",
-      theme_color: "#a3e635",
+      theme_color: "#2c3e50",
+      // Captured at 2x device pixel ratio; sizes are the image pixel sizes.
       screenshots: [
         {
           src: "/screenshots/mobile-screenshot-1.png",
-          sizes: "428x926",
+          sizes: "856x1852",
           form_factor: "narrow",
-          label: "mobile view",
+          label: "Overview of every system",
         },
-
         {
           src: "/screenshots/mobile-screenshot-2.png",
-          sizes: "428x926",
+          sizes: "856x1852",
           form_factor: "narrow",
-          label: "mobile view",
+          label: "System charts",
         },
         {
           src: "/screenshots/mobile-screenshot-3.png",
-          sizes: "428x926",
+          sizes: "856x1852",
           form_factor: "narrow",
-          label: "mobile view",
+          label: "Containers and processes",
         },
         {
           src: "/screenshots/mobile-screenshot-4.png",
-          sizes: "428x926",
+          sizes: "856x1852",
           form_factor: "narrow",
-          label: "mobile view",
+          label: "Agent approval",
         },
         {
           src: "/screenshots/desktop-screenshot-1.png",
           form_factor: "wide",
-          sizes: "1440x900",
-          label: "desktop view",
+          sizes: "2880x1800",
+          label: "Overview of every system",
         },
         {
           src: "/screenshots/desktop-screenshot-2.png",
           form_factor: "wide",
-          sizes: "1440x900",
-          label: "desktop view",
+          sizes: "2880x1800",
+          label: "System detail",
         },
         {
           src: "/screenshots/desktop-screenshot-3.png",
           form_factor: "wide",
-          sizes: "1440x900",
-          label: "desktop view",
+          sizes: "2880x1800",
+          label: "Agent approval",
         },
       ],
       icons: [

@@ -32,7 +32,7 @@ Linux-only.
 3. Copy `agent/.env.example` to `.env` beside it; set `SERVER_URL` and `NAME`.
    Leave `AGENT_TOKEN` empty.
 4. Run it from that folder. On first run it prints a pairing code — approve it
-   in the dashboard's **Agents** section and it starts sending metrics.
+   on the dashboard's **Agents** page and it starts sending metrics.
 
 For background operation, use the example
 [`servomon_agent.service`](https://github.com/nirjan-dev/servomon/blob/main/agent/servomon_agent.service)

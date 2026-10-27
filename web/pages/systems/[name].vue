@@ -1,245 +1,109 @@
-<template>
-  <div class="flex items-center gap-3 flex-wrap">
-    <UBreadcrumb :items="breadcrumbItems" class="capitalize" />
-    <span v-if="!isLoadingMetrics" class="flex items-center gap-1.5 text-sm text-muted">
-      <span class="inline-block w-2 h-2 rounded-full" :class="freshness.dotClass.value" />
-      {{ freshness.label.value }}
-    </span>
-  </div>
-
-  <USkeleton v-if="isLoadingMetrics" class="mt-6 w-full h-svh" />
-
-  <template v-else>
-    <div
-      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-wrap mt-6 mb-12"
-    >
-      <SystemInfo
-        :name="systemName"
-        :timestamp="metrics[0]?.timestamp"
-        :system-info="systemInfo"
-      />
-      <MemoryOverview :memoryMetrics="memoryStats.at(-1)!" />
-      <NetworkOverview :network-metrics="networkStats.at(-1)!" />
-      <MemoryMetrics :memory-metrics="memoryStats" />
-      <StorageMetrics :storage-metrics="diskStats" />
-      <CPUUsage :cpu-metrics="cpuStats" />
-    </div>
-    <UCard class="mb-4" v-if="dockerStats.length">
-      <template #header>
-        <h2 class="inline-block mr-2">Containers</h2>
-        <div class="inline-flex gap-2">
-          <UButton color="error" @click="executeDockerCommand('stop')"
-            >Stop</UButton
-          >
-          <UButton color="warning" @click="executeDockerCommand('pause')"
-            >Pause</UButton
-          >
-          <UButton color="success" @click="executeDockerCommand('unpause')"
-            >Unpause</UButton
-          >
-        </div>
-      </template>
-      <UTable
-        v-model:row-selection="containerSelection"
-        :data="dockerStats"
-        :columns="containersColumns"
-        :get-row-id="(row: ContainerRow) => row.name"
-      />
-    </UCard>
-    <UCard class="mb-4">
-      <template #header>
-        <h2 class="inline-block mr-2">Top Processes</h2>
-        <UButton color="error" @click="killSelectedProcesses">Kill</UButton>
-      </template>
-      <UTable
-        v-model:row-selection="processSelection"
-        :data="processesStats"
-        :columns="processTableColumns"
-        :get-row-id="(row: ProcessRow) => String(row.ID)"
-      />
-    </UCard>
-  </template>
-</template>
-
 <script setup lang="ts">
-import { h, resolveComponent } from "vue";
-import type { TableColumn } from "@nuxt/ui";
 import type { ContainerInfo, Metrics, ProcessInfo } from "../../../shared/types";
+import type { ChartSeries } from "~/components/TimeSeriesChart.vue";
+import type { ContainerRow, DockerAction } from "~/components/ContainerTable.vue";
+import type { ProcessRow } from "~/components/ProcessTable.vue";
 import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebsocketClient";
+import { useFleet } from "~/composables/useFleet";
 import { useFreshness } from "~/composables/useFreshness";
-const UCheckbox = resolveComponent("UCheckbox");
-const metrics = ref<Metrics[]>([]);
-// Table selection, keyed by row id (pid / container name; see :get-row-id).
+import { useMetricsStream } from "~/composables/useMetricsStream";
+import { osName } from "~/utils/layout";
+import {
+  displayRate,
+  formatGiB,
+  formatPercent,
+  formatRate,
+  LEVEL_TEXT,
+  levelOf,
+  parsePercent,
+  parseRate,
+  rateScale,
+} from "~/utils/metrics";
+
+// Nuxt keys pages by route params, so switching systems remounts this page.
+const systemName = String(useRoute().params.name ?? "");
+const { entries, setAlerts } = useFleet();
+const entry = computed(() => entries.value.find((e) => e.name === systemName));
+
+const { metrics, synced, connect: connectMetrics } = useMetricsStream(systemName);
+const latest = computed(() => metrics.value.at(-1));
+const freshness = useFreshness(computed(() => latest.value?.timestamp));
+
+const statusText = computed(
+  () =>
+    ({ live: "text-muted", stale: "text-warning", offline: "text-error", unknown: "text-muted" })[
+      freshness.state.value
+    ],
+);
+
+const windowLabel = computed(() => {
+  const first = metrics.value[0]?.timestamp;
+  const last = latest.value?.timestamp;
+  if (!first || !last || last <= first) return "";
+  const minutes = Math.max(1, Math.round((last - first) / 60_000));
+  return minutes < 90 ? `Last ${minutes} min` : `Last ${Math.round(minutes / 60)} h`;
+});
+
+const cpuSeries: ChartSeries[] = [{ label: "CPU", value: (m) => m.cpu.used, color: "var(--chart-series)" }];
+const memorySeries: ChartSeries[] = [
+  { label: "Used", value: (m) => m.memory.used, color: "var(--chart-series)" },
+];
+const networkSeries: ChartSeries[] = [
+  { label: "Download", value: (m) => parseRate(m.networkInfo.downloadPerSecond) ?? 0, color: "var(--chart-series)" },
+  { label: "Upload", value: (m) => parseRate(m.networkInfo.uploadPerSecond) ?? 0, color: "var(--chart-series-2)" },
+];
+const networkScale = computed(() =>
+  rateScale(Math.max(0, ...metrics.value.flatMap((m) => networkSeries.map((s) => s.value(m))))),
+);
+
+const cpuLevel = computed(() => levelOf("cpu", latest.value?.cpu.used));
+const memLevel = computed(() => levelOf("memory", latest.value?.memory.usedPercentage));
+
+const disks = computed(() =>
+  [...(latest.value?.disk ?? [])].sort((a, b) => b.usedPercentage - a.usedPercentage),
+);
+
+const networkIssues = computed(() => {
+  const n = latest.value?.networkInfo;
+  if (!n) return [];
+  return [
+    ["Download errors", n.downloadErrors],
+    ["Download drops", n.downloadDrops],
+    ["Upload errors", n.uploadErrors],
+    ["Upload drops", n.uploadDrops],
+  ].filter(([, value]) => (parsePercent(value) ?? 0) > 0) as [string, string][];
+});
+
+const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const details = computed(() => {
+  const m = latest.value;
+  if (!m) return [];
+  return [
+    ["OS", osName(m.systemInfo.os) || "—"],
+    ["Kernel", m.systemInfo.kernel || "—"],
+    ["Device", m.systemInfo.device || "—"],
+    ["CPU", `${m.cpu.cores} cores`],
+    // The agent reports 0 when the machine has no battery.
+    ["Battery", m.battery.charge > 0 ? `${m.battery.charge}%` : "Not detected"],
+    ["Last sample", timeFormat.format(m.timestamp)],
+  ];
+});
+
+// Tables follow the newest sample until the user picks rows explicitly.
 const processSelection = ref<Record<string, boolean>>({});
 const containerSelection = ref<Record<string, boolean>>({});
-const systemName = useRoute().params.name ?? "";
-const isLoadingMetrics = computed(() => metrics.value.length === 0);
-// Newest sample across the stream; freshness follows it as data arrives.
-const newestTimestamp = computed(() => {
-  if (!metrics.value.length) return undefined;
-  return Math.max(...metrics.value.map((m) => m.timestamp));
-});
-const freshness = useFreshness(newestTimestamp);
-const breadcrumbItems = [
-  {
-    label: "Home",
-    icon: "i-heroicons-home",
-    to: "/",
-  },
-  {
-    label: `${systemName} Dashboard`,
-    icon: "i-heroicons-chart-bar",
-  },
-];
+const processes = ref<ProcessInfo[]>([]);
+const containers = ref<ContainerInfo[]>([]);
+const anySelected = (selection: Record<string, boolean>) => Object.values(selection).some(Boolean);
 
-function selectColumn<T>(): TableColumn<T> {
-  return {
-    id: "select",
-    header: ({ table }) =>
-      h(UCheckbox, {
-        modelValue: table.getIsSomePageRowsSelected()
-          ? "indeterminate"
-          : table.getIsAllPageRowsSelected(),
-        "onUpdate:modelValue": (value: boolean | "indeterminate") =>
-          table.toggleAllPageRowsSelected(!!value),
-        "aria-label": "Select all",
-      }),
-    cell: ({ row }) =>
-      h(UCheckbox, {
-        modelValue: row.getIsSelected(),
-        "onUpdate:modelValue": (value: boolean | "indeterminate") =>
-          row.toggleSelected(!!value),
-        "aria-label": "Select row",
-      }),
-  };
-}
-
-const processTableColumns: TableColumn<ProcessRow>[] = [
-  selectColumn<ProcessRow>(),
-  { accessorKey: "ID", header: "ID" },
-  { accessorKey: "name", header: "name" },
-  { accessorKey: "cpu", header: "CPU" },
-  { accessorKey: "memory", header: "memory" },
-];
-
-let ws: CommandExecutorWebsocketClient;
-
-const memoryStats = computed(() => {
-  return metrics.value.map((metricsItem) => {
-    return {
-      timestamp: metricsItem.timestamp,
-      total: metricsItem.memory.total,
-
-      free: metricsItem.memory.free,
-
-      used: metricsItem.memory.used,
-
-      usedPercent: metricsItem.memory.usedPercentage,
-    };
-  });
-});
-const systemInfo = computed(() => {
-  return metrics.value[0]?.systemInfo;
-});
-const networkStats = computed(() => {
-  return metrics.value.map((metricsItem) => {
-    return {
-      upload: metricsItem.networkInfo.uploadPerSecond,
-      download: metricsItem.networkInfo.downloadPerSecond,
-      uploadErrors: metricsItem.networkInfo.uploadErrors,
-      uploadDrops: metricsItem.networkInfo.uploadDrops,
-      downloadErrors: metricsItem.networkInfo.downloadErrors,
-      downloadDrops: metricsItem.networkInfo.downloadDrops,
-    };
-  });
+watch(metrics, (samples) => {
+  const newest = samples.at(-1);
+  if (!newest) return;
+  if (!anySelected(processSelection.value)) processes.value = newest.processes ?? [];
+  if (!anySelected(containerSelection.value)) containers.value = newest.containersInfo ?? [];
 });
 
-const cpuStats = computed(() => {
-  return metrics.value.map((metricsItem) => {
-    return {
-      available: metricsItem.cpu.available,
-      used: metricsItem.cpu.used,
-      Cores: metricsItem.cpu.cores,
-      timestamp: metricsItem.timestamp,
-    };
-  });
-});
-
-const diskStats = computed(() => {
-  if (!metrics.value[0]) {
-    return [];
-  }
-
-  return metrics.value[0].disk.map((disk) => {
-    return {
-      device: disk.device,
-      mount: disk.mountPoint,
-      free: disk.free,
-      used: disk.used,
-      total: disk.total,
-      usedPercent: disk.usedPercentage,
-    };
-  });
-});
-
-const rawProcessStats = ref<ProcessInfo[]>([]);
-
-const processesStats = computed(() => {
-  if (!rawProcessStats.value.length) {
-    return [];
-  }
-
-  return rawProcessStats.value.map((process) => {
-    return {
-      name: process.app,
-      cpu: process.cpuPercent,
-      ID: process.pid,
-      memory: process.memoryPercent,
-    };
-  });
-});
-type ProcessRow = (typeof processesStats.value)[number];
-const selectedProcesses = computed(() =>
-  processesStats.value.filter((p) => processSelection.value[String(p.ID)])
-);
-const rawDockerStats = ref<ContainerInfo[]>([]);
-const dockerStats = computed(() => {
-  if (!rawDockerStats.value.length) {
-    return [];
-  }
-
-  return rawDockerStats.value.map((container) => {
-    return {
-      name: container.name,
-      state: container.state,
-      cpu: container.cpuUsed,
-      memory: container.memoryUsed,
-      "memory %": container.memoryUsedPercent,
-    };
-  });
-});
-type ContainerRow = (typeof dockerStats.value)[number];
-const selectedContainers = computed(() =>
-  dockerStats.value.filter((c) => containerSelection.value[c.name])
-);
-
-const containersColumns: TableColumn<ContainerRow>[] = [
-  selectColumn<ContainerRow>(),
-  {
-    accessorKey: "name",
-    header: "Name",
-    meta: {
-      class: {
-        th: "sticky z-10 bg-neutral-900 left-0",
-        td: "sticky z-10 bg-neutral-900 left-0 truncate max-w-[25ch]",
-      },
-    },
-  },
-  { accessorKey: "state", header: "State" },
-  { accessorKey: "cpu", header: "CPU" },
-  { accessorKey: "memory", header: "Memory" },
-  { accessorKey: "memory %", header: "Memory %" },
-];
+let ws: CommandExecutorWebsocketClient | undefined;
 
 onMounted(async () => {
   connectMetrics();
@@ -264,10 +128,7 @@ async function setupPushSubscription() {
       public: { pushPublicKey },
     } = useRuntimeConfig();
     // setup new sub
-    const newSub = await subscribeUserToPushNotifications(
-      pushManager,
-      pushPublicKey
-    );
+    const newSub = await subscribeUserToPushNotifications(pushManager, pushPublicKey);
 
     if (!newSub) {
       return;
@@ -309,15 +170,13 @@ async function storeSubscription(sub: PushSubscription) {
 
 async function subscribeUserToPushNotifications(
   pushManager: PushManager,
-  publicKey: string
+  publicKey: string,
 ): Promise<PushSubscription | undefined> {
   if (Notification.permission !== "granted") {
     await Notification.requestPermission();
   }
   if (Notification.permission !== "granted") {
-    alert(
-      "Push notifications disabled because notification permission was denied"
-    );
+    alert("Push notifications disabled because notification permission was denied");
     return;
   }
 
@@ -335,20 +194,6 @@ async function subscribeUserToPushNotifications(
 
   return newSub;
 }
-const { metrics: streamedMetrics, connect: connectMetrics } = useMetricsStream(
-  computed(() => systemName as string)
-);
-
-// Tables follow the newest sample until the user picks rows explicitly.
-watch(streamedMetrics, (samples) => {
-  metrics.value = samples;
-  if (!selectedProcesses.value.length && samples.at(-1)?.processes) {
-    rawProcessStats.value = samples.at(-1)!.processes;
-  }
-  if (!selectedContainers.value.length && samples.at(-1)?.containersInfo) {
-    rawDockerStats.value = samples.at(-1)!.containersInfo;
-  }
-});
 
 async function setupWebsocket() {
   if (ws) {
@@ -372,41 +217,214 @@ async function setupWebsocket() {
   await ws.connect();
 }
 
-function killSelectedProcesses() {
-  if (!selectedProcesses.value.length) {
-    return;
-  }
-  selectedProcesses.value.forEach((process) => {
-    ws.executeCommand({
+function killProcesses(rows: ProcessRow[]) {
+  for (const row of rows) {
+    ws?.executeCommand({
       type: "process",
       action: "kill",
-      pid: String(process.ID),
-      processName: process.name,
-      system: systemName as string,
+      pid: row.pid,
+      processName: row.name,
+      system: systemName,
     });
-  });
-
+  }
   processSelection.value = {};
 }
 
-function executeDockerCommand(action: "pause" | "unpause" | "stop") {
-  if (!selectedContainers.value.length) {
-    return;
-  }
-
-  selectedContainers.value.forEach((container) => {
-    ws.executeCommand({
+function runDockerCommand(action: DockerAction, rows: ContainerRow[]) {
+  for (const row of rows) {
+    ws?.executeCommand({
       type: "docker",
       action,
-      containerName: container.name,
-      system: systemName as string,
+      containerName: row.name,
+      system: systemName,
     });
-  });
-
+  }
   containerSelection.value = {};
 }
 
-onBeforeUnmount(async () => {
-  ws.disconnect();
+onBeforeUnmount(() => {
+  ws?.disconnect();
 });
 </script>
+
+<template>
+  <UDashboardPanel id="system">
+    <template #header>
+      <UDashboardNavbar :title="systemName" :ui="{ title: 'font-mono', right: 'gap-4' }">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+        <template #trailing>
+          <span v-if="synced" class="hidden items-center gap-1.5 text-sm sm:flex" :class="statusText">
+            <StatusDot :color="freshness.color.value" />{{ freshness.label.value }}
+          </span>
+        </template>
+        <template #right>
+          <USwitch
+            v-if="entry"
+            :model-value="entry.alerts"
+            label="Alerts"
+            color="neutral"
+            :aria-label="`Push alerts for ${systemName}`"
+            @update:model-value="(enabled: boolean) => setAlerts(systemName, enabled)"
+          />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <span v-if="synced" class="flex items-center gap-1.5 text-sm sm:hidden" :class="statusText">
+        <StatusDot :color="freshness.color.value" />{{ freshness.label.value }}
+      </span>
+
+      <div v-if="!synced" class="grid gap-4 xl:grid-cols-2" aria-busy="true">
+        <USkeleton v-for="n in 4" :key="n" class="h-64 w-full" />
+      </div>
+
+      <UEmpty
+        v-else-if="!latest"
+        icon="i-lucide-activity"
+        :title="`No metrics from ${systemName} yet`"
+        description="Charts appear as soon as its agent reports."
+        :actions="[{ label: 'Back to overview', to: '/', color: 'neutral', variant: 'outline' }]"
+      />
+
+      <template v-else>
+        <div class="grid gap-4 xl:grid-cols-2">
+          <AppPanel>
+            <template #header>
+              <h2 class="text-sm font-semibold text-highlighted">CPU</h2>
+            </template>
+            <template #actions>
+              <span class="text-xs text-muted">{{ windowLabel }}</span>
+            </template>
+            <p class="flex items-baseline gap-2">
+              <span class="text-2xl font-semibold tabular-nums" :class="LEVEL_TEXT[cpuLevel]">
+                {{ formatPercent(latest.cpu.used) }}
+              </span>
+              <span class="text-sm text-muted">of {{ latest.cpu.cores }} cores</span>
+            </p>
+            <TimeSeriesChart
+              class="mt-3"
+              :data="metrics"
+              :series="cpuSeries"
+              :y-domain="[0, 100]"
+              :format="(v: number) => `${Math.round(v)}%`"
+              :label="`CPU usage over time, now ${formatPercent(latest.cpu.used)}`"
+            />
+          </AppPanel>
+
+          <AppPanel>
+            <template #header>
+              <h2 class="text-sm font-semibold text-highlighted">Memory</h2>
+            </template>
+            <template #actions>
+              <span class="text-xs text-muted">{{ windowLabel }}</span>
+            </template>
+            <p class="flex items-baseline gap-2">
+              <span class="text-2xl font-semibold tabular-nums" :class="LEVEL_TEXT[memLevel]">
+                {{ formatGiB(latest.memory.used) }}
+              </span>
+              <span class="text-sm text-muted tabular-nums">
+                of {{ formatGiB(latest.memory.total) }} · {{ formatPercent(latest.memory.usedPercentage) }}
+              </span>
+            </p>
+            <TimeSeriesChart
+              class="mt-3"
+              :data="metrics"
+              :series="memorySeries"
+              :y-domain="[0, latest.memory.total]"
+              :format="formatGiB"
+              :label="`Memory used over time, now ${formatGiB(latest.memory.used)}`"
+            />
+          </AppPanel>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <AppPanel class="lg:col-span-2 xl:col-span-1">
+            <template #header>
+              <h2 class="text-sm font-semibold text-highlighted">Network</h2>
+            </template>
+            <template #actions>
+              <span class="text-xs text-muted">{{ windowLabel }}</span>
+            </template>
+            <dl class="flex flex-wrap gap-x-6 gap-y-1">
+              <div class="flex items-center gap-2">
+                <dt class="flex items-center gap-1.5 text-sm text-muted">
+                  <span class="size-2 rounded-full bg-(--chart-series)" aria-hidden="true" />Download
+                </dt>
+                <dd class="font-semibold tabular-nums text-highlighted">
+                  {{ displayRate(latest.networkInfo.downloadPerSecond) }}
+                </dd>
+              </div>
+              <div class="flex items-center gap-2">
+                <dt class="flex items-center gap-1.5 text-sm text-muted">
+                  <span class="size-2 rounded-full bg-(--chart-series-2)" aria-hidden="true" />Upload
+                </dt>
+                <dd class="font-semibold tabular-nums text-highlighted">
+                  {{ displayRate(latest.networkInfo.uploadPerSecond) }}
+                </dd>
+              </div>
+            </dl>
+            <TimeSeriesChart
+              class="mt-3"
+              :data="metrics"
+              :series="networkSeries"
+              :y-domain="[0, networkScale.top]"
+              :y-ticks="networkScale.ticks"
+              :format="formatRate"
+              :height="132"
+              label="Network throughput over time"
+            />
+            <p v-if="!networkIssues.length" class="mt-2 text-xs text-muted">No errors or dropped packets.</p>
+            <ul v-else class="mt-2 flex flex-wrap gap-x-4 text-xs text-warning">
+              <li v-for="[label, value] in networkIssues" :key="label">{{ label }} {{ value }}</li>
+            </ul>
+          </AppPanel>
+
+          <AppPanel title="Storage">
+            <ul class="flex flex-col gap-4">
+              <li v-for="disk in disks" :key="`${disk.device}${disk.mountPoint}`">
+                <div class="flex items-baseline justify-between gap-3">
+                  <span class="min-w-0 truncate font-mono text-sm text-highlighted" :title="disk.device">
+                    {{ disk.mountPoint }}
+                  </span>
+                  <span class="shrink-0 text-sm font-medium tabular-nums" :class="LEVEL_TEXT[levelOf('disk', disk.usedPercentage)]">
+                    {{ formatPercent(disk.usedPercentage) }}
+                  </span>
+                </div>
+                <UsageMeter
+                  class="mt-1.5"
+                  :percent="disk.usedPercentage"
+                  :level="levelOf('disk', disk.usedPercentage)"
+                  :label="`${disk.mountPoint} used`"
+                />
+                <p class="mt-1 text-xs text-muted tabular-nums">
+                  {{ formatGiB(disk.used) }} of {{ formatGiB(disk.total) }} · {{ formatGiB(disk.free) }} free
+                </p>
+              </li>
+              <li v-if="!disks.length" class="text-sm text-muted">No disks reported</li>
+            </ul>
+          </AppPanel>
+
+          <AppPanel title="System">
+            <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+              <template v-for="[label, value] in details" :key="label">
+                <dt class="text-muted">{{ label }}</dt>
+                <dd class="truncate text-end text-highlighted tabular-nums" :title="value">{{ value }}</dd>
+              </template>
+            </dl>
+          </AppPanel>
+        </div>
+
+        <ContainerTable
+          v-if="containers.length"
+          v-model:selection="containerSelection"
+          :containers="containers"
+          @command="runDockerCommand"
+        />
+        <ProcessTable v-model:selection="processSelection" :processes="processes" @kill="killProcesses" />
+      </template>
+    </template>
+  </UDashboardPanel>
+</template>

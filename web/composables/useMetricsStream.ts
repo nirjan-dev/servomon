@@ -12,6 +12,8 @@ type StreamMessage = { type: "sync"; metrics: Metrics[] } | { type: "delta"; met
 
 export function useMetricsStream(system: Ref<string> | string) {
   const metrics: Ref<Metrics[]> = ref([]);
+  // True once the first sync arrived: lets callers tell "no data" from "loading".
+  const synced = ref(false);
   let stream: EventSource | null = null;
 
   function apply(message: StreamMessage) {
@@ -19,6 +21,7 @@ export function useMetricsStream(system: Ref<string> | string) {
       metrics.value = [...message.metrics]
         .sort((a, b) => a.timestamp - b.timestamp)
         .slice(-MAX_CLIENT_SAMPLES);
+      synced.value = true;
       return;
     }
     if (!message.metrics.length) return; // heartbeat, nothing new
@@ -60,5 +63,5 @@ export function useMetricsStream(system: Ref<string> | string) {
     disconnect();
   });
 
-  return { metrics, connect, disconnect };
+  return { metrics, synced, connect, disconnect };
 }
