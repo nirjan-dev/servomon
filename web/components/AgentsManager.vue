@@ -3,7 +3,7 @@
     <UCard v-if="pending.length">
       <template #header>
         <h2 class="font-semibold">Pending agents ({{ pending.length }})</h2>
-        <p class="text-sm text-gray-500">
+        <p class="text-sm text-muted">
           New agents waiting for your approval. Verify the fingerprint matches
           what the agent printed, then approve.
         </p>
@@ -11,20 +11,20 @@
       <div
         v-for="req in pending"
         :key="req.code"
-        class="flex flex-wrap items-center gap-3 py-2 border-b last:border-0"
+        class="flex flex-wrap items-center gap-3 py-2 border-b border-default last:border-0"
       >
         <div class="flex-1 min-w-48">
           <p class="font-mono font-bold">{{ req.system }}</p>
-          <p class="text-xs text-gray-500">
+          <p class="text-xs text-muted">
             code <span class="font-mono">{{ req.code }}</span> ·
             fingerprint
             <span class="font-mono">{{ req.fingerprint.slice(0, 19) }}…</span>
           </p>
         </div>
-        <UButton color="green" size="sm" @click="approve(req.code)">
+        <UButton color="success" @click="approve(req.code)">
           Approve
         </UButton>
-        <UButton color="red" variant="soft" size="sm" @click="deny(req.code)">
+        <UButton color="error" variant="soft" @click="deny(req.code)">
           Deny
         </UButton>
       </div>
@@ -34,10 +34,10 @@
       <template #header>
         <div class="flex items-center justify-between">
           <h2 class="font-semibold">Enrolled agents ({{ agents.length }})</h2>
-          <UButton variant="ghost" size="sm" @click="refresh">Refresh</UButton>
+          <UButton variant="ghost" @click="refresh">Refresh</UButton>
         </div>
       </template>
-      <p v-if="!agents.length" class="text-sm text-gray-500">
+      <p v-if="!agents.length" class="text-sm text-muted">
         No agents enrolled yet. Run the agent without an
         <span class="font-mono">AGENT_TOKEN</span> and approve its pairing code
         here.
@@ -45,20 +45,19 @@
       <div
         v-for="agent in agents"
         :key="agent.agentId"
-        class="flex flex-wrap items-center gap-3 py-2 border-b last:border-0"
+        class="flex flex-wrap items-center gap-3 py-2 border-b border-default last:border-0"
       >
         <div class="flex-1 min-w-48">
           <NuxtLink :to="`/systems/${agent.system}`" class="font-mono font-bold underline">
             {{ agent.system }}
           </NuxtLink>
-          <p class="text-xs text-gray-500">
+          <p class="text-xs text-muted">
             last seen {{ formatSeen(agent.lastSeenAt) }}
           </p>
         </div>
         <UButton
-          color="red"
+          color="error"
           variant="soft"
-          size="sm"
           @click="removeAgent(agent.agentId, agent.system)"
         >
           Remove
@@ -107,10 +106,10 @@ async function refresh() {
 async function approve(code: string) {
   try {
     await $fetch("/api/enroll/approve", { method: "POST", body: { code } });
-    useToast().add({ title: "Agent approved", color: "green" });
+    useToast().add({ title: "Agent approved", color: "success" });
   } catch (error) {
     console.log({ error });
-    useToast().add({ title: "Approval failed", color: "red" });
+    useToast().add({ title: "Approval failed", color: "error" });
   } finally {
     await refresh();
   }
@@ -130,10 +129,10 @@ async function removeAgent(agentId: string, system: string) {
   if (!confirm(`Remove agent "${system}"? Its token stops working immediately.`)) return;
   try {
     await $fetch(`/api/agents/${agentId}`, { method: "DELETE" });
-    useToast().add({ title: `Removed agent "${system}"`, color: "green" });
+    useToast().add({ title: `Removed agent "${system}"`, color: "success" });
   } catch (error) {
     console.log({ error });
-    useToast().add({ title: "Removal failed", color: "red" });
+    useToast().add({ title: "Removal failed", color: "error" });
   } finally {
     await refresh();
   }

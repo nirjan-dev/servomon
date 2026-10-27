@@ -41,6 +41,10 @@ export default defineNuxtConfig({
     },
   },
   modules: ["@nuxt/ui", "@kgierke/nuxt-basic-auth", "@vite-pwa/nuxt"],
+  css: ["~/assets/css/main.css"],
+  // With ssr off, icons missing from the client bundle are fetched from the
+  // public Iconify API at runtime; scan the sources and bundle them instead.
+  icon: { clientBundle: { scan: true } },
   compatibilityDate: "2024-12-30",
   runtimeConfig: {
     discordWebhookUrl: "",

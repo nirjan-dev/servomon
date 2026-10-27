@@ -54,7 +54,7 @@ export class CommandExecutorWebsocketClient extends WebsocketClient {
       title: `Command execution ${
         result.data.success ? "succeeded" : "failed"
       }`,
-      color: result.data.success ? "green" : "red",
+      color: result.data.success ? "success" : "error",
       description: message,
     });
   }

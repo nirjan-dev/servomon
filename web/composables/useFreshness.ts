@@ -75,7 +75,7 @@ export function useFreshness(newestTimestamp: Ref<number | undefined>) {
       case "offline":
         return "bg-red-500";
       default:
-        return "bg-gray-500";
+        return "bg-neutral-500";
     }
   });
 

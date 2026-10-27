@@ -4,8 +4,6 @@
     <MetricsTitle />
     <slot />
 
-    <UNotifications />
-
     <footer>
       <p class="text-center py-4">
         Made with ❤️ by

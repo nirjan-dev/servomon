@@ -65,10 +65,10 @@ async function handleDeleteSystem(system: string) {
     await $fetch(`/api/systems/${system}`, { method: "DELETE" });
     // Removing the card unmounts it, which closes its stream.
     systems.value = systems.value.filter((s) => s !== system);
-    useToast().add({ title: `Deleted "${system}"`, color: "green" });
+    useToast().add({ title: `Deleted "${system}"`, color: "success" });
   } catch (error) {
     console.log({ error });
-    useToast().add({ title: `Error deleting "${system}"`, color: "red" });
+    useToast().add({ title: `Error deleting "${system}"`, color: "error" });
   }
 }
 
@@ -83,13 +83,13 @@ async function handleAlertToggleChange(value: boolean, system: string) {
     });
     useToast().add({
       title: "Successfully updated system alert config",
-      color: "green",
+      color: "success",
     });
   } catch (error) {
     console.log({ error });
     useToast().add({
       title: "Error updating system alert config",
-      color: "red",
+      color: "error",
     });
   }
 }

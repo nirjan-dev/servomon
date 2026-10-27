@@ -1,7 +1,7 @@
 <template>
   <div class="flex items-center gap-3 flex-wrap">
-    <UBreadcrumb :links="breadcrumbLinks" class="capitalize" />
-    <span v-if="!isLoadingMetrics" class="flex items-center gap-1.5 text-sm text-gray-500">
+    <UBreadcrumb :items="breadcrumbItems" class="capitalize" />
+    <span v-if="!isLoadingMetrics" class="flex items-center gap-1.5 text-sm text-muted">
       <span class="inline-block w-2 h-2 rounded-full" :class="freshness.dotClass.value" />
       {{ freshness.label.value }}
     </span>
@@ -28,44 +28,50 @@
       <template #header>
         <h2 class="inline-block mr-2">Containers</h2>
         <div class="inline-flex gap-2">
-          <UButton color="red" @click="executeDockerCommand('stop')"
+          <UButton color="error" @click="executeDockerCommand('stop')"
             >Stop</UButton
           >
-          <UButton color="yellow" @click="executeDockerCommand('pause')"
+          <UButton color="warning" @click="executeDockerCommand('pause')"
             >Pause</UButton
           >
-          <UButton color="green" @click="executeDockerCommand('unpause')"
+          <UButton color="success" @click="executeDockerCommand('unpause')"
             >Unpause</UButton
           >
         </div>
       </template>
       <UTable
-        v-model="selectedContainers"
-        :rows="dockerStats"
+        v-model:row-selection="containerSelection"
+        :data="dockerStats"
         :columns="containersColumns"
+        :get-row-id="(row: ContainerRow) => row.name"
       />
     </UCard>
     <UCard class="mb-4">
       <template #header>
         <h2 class="inline-block mr-2">Top Processes</h2>
-        <UButton color="red" @click="killSelectedProcesses">Kill</UButton>
+        <UButton color="error" @click="killSelectedProcesses">Kill</UButton>
       </template>
       <UTable
+        v-model:row-selection="processSelection"
+        :data="processesStats"
         :columns="processTableColumns"
-        v-model="selectedProcesses"
-        :rows="processesStats"
+        :get-row-id="(row: ProcessRow) => String(row.ID)"
       />
     </UCard>
   </template>
 </template>
 
 <script setup lang="ts">
+import { h, resolveComponent } from "vue";
+import type { TableColumn } from "@nuxt/ui";
 import type { ContainerInfo, Metrics, ProcessInfo } from "../../../shared/types";
 import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebsocketClient";
 import { useFreshness } from "~/composables/useFreshness";
+const UCheckbox = resolveComponent("UCheckbox");
 const metrics = ref<Metrics[]>([]);
-const selectedProcesses = ref<typeof processesStats.value>([]);
-const selectedContainers = ref<typeof dockerStats.value>([]);
+// Table selection, keyed by row id (pid / container name; see :get-row-id).
+const processSelection = ref<Record<string, boolean>>({});
+const containerSelection = ref<Record<string, boolean>>({});
 const systemName = useRoute().params.name ?? "";
 const isLoadingMetrics = computed(() => metrics.value.length === 0);
 // Newest sample across the stream; freshness follows it as data arrives.
@@ -74,7 +80,7 @@ const newestTimestamp = computed(() => {
   return Math.max(...metrics.value.map((m) => m.timestamp));
 });
 const freshness = useFreshness(newestTimestamp);
-const breadcrumbLinks = [
+const breadcrumbItems = [
   {
     label: "Home",
     icon: "i-heroicons-home",
@@ -82,32 +88,38 @@ const breadcrumbLinks = [
   },
   {
     label: `${systemName} Dashboard`,
-    icon: "heroicons:chart-bar",
+    icon: "i-heroicons-chart-bar",
   },
 ];
-const processTableColumns = [
-  // NOTE: adding a placeholder to the start because for some reason if I make the table selectable it removes the first column
-  {
-    key: "placeholder",
-  },
-  {
-    key: "ID",
-    label: "ID",
-  },
 
-  {
-    key: "name",
-    label: "name",
-  },
+function selectColumn<T>(): TableColumn<T> {
+  return {
+    id: "select",
+    header: ({ table }) =>
+      h(UCheckbox, {
+        modelValue: table.getIsSomePageRowsSelected()
+          ? "indeterminate"
+          : table.getIsAllPageRowsSelected(),
+        "onUpdate:modelValue": (value: boolean | "indeterminate") =>
+          table.toggleAllPageRowsSelected(!!value),
+        "aria-label": "Select all",
+      }),
+    cell: ({ row }) =>
+      h(UCheckbox, {
+        modelValue: row.getIsSelected(),
+        "onUpdate:modelValue": (value: boolean | "indeterminate") =>
+          row.toggleSelected(!!value),
+        "aria-label": "Select row",
+      }),
+  };
+}
 
-  {
-    key: "cpu",
-    label: "CPU",
-  },
-  {
-    key: "memory",
-    label: "memory",
-  },
+const processTableColumns: TableColumn<ProcessRow>[] = [
+  selectColumn<ProcessRow>(),
+  { accessorKey: "ID", header: "ID" },
+  { accessorKey: "name", header: "name" },
+  { accessorKey: "cpu", header: "CPU" },
+  { accessorKey: "memory", header: "memory" },
 ];
 
 let ws: CommandExecutorWebsocketClient;
@@ -186,6 +198,10 @@ const processesStats = computed(() => {
     };
   });
 });
+type ProcessRow = (typeof processesStats.value)[number];
+const selectedProcesses = computed(() =>
+  processesStats.value.filter((p) => processSelection.value[String(p.ID)])
+);
 const rawDockerStats = ref<ContainerInfo[]>([]);
 const dockerStats = computed(() => {
   if (!rawDockerStats.value.length) {
@@ -202,34 +218,27 @@ const dockerStats = computed(() => {
     };
   });
 });
+type ContainerRow = (typeof dockerStats.value)[number];
+const selectedContainers = computed(() =>
+  dockerStats.value.filter((c) => containerSelection.value[c.name])
+);
 
-const containersColumns = [
+const containersColumns: TableColumn<ContainerRow>[] = [
+  selectColumn<ContainerRow>(),
   {
-    key: "spaceForSelectBox",
-    label: "space for select box",
+    accessorKey: "name",
+    header: "Name",
+    meta: {
+      class: {
+        th: "sticky z-10 bg-neutral-900 left-0",
+        td: "sticky z-10 bg-neutral-900 left-0 truncate max-w-[25ch]",
+      },
+    },
   },
-  {
-    key: "name",
-    label: "Name",
-    class: "sticky z-10 bg-gray-900 left-0",
-    rowClass: "sticky z-10 bg-gray-900 left-0 truncate max-w-[25ch]",
-  },
-  {
-    key: "state",
-    label: "State",
-  },
-  {
-    key: "cpu",
-    label: "CPU",
-  },
-  {
-    key: "memory",
-    label: "Memory",
-  },
-  {
-    key: "memory %",
-    label: "Memory %",
-  },
+  { accessorKey: "state", header: "State" },
+  { accessorKey: "cpu", header: "CPU" },
+  { accessorKey: "memory", header: "Memory" },
+  { accessorKey: "memory %", header: "Memory %" },
 ];
 
 onMounted(async () => {
@@ -377,7 +386,7 @@ function killSelectedProcesses() {
     });
   });
 
-  selectedProcesses.value = [];
+  processSelection.value = {};
 }
 
 function executeDockerCommand(action: "pause" | "unpause" | "stop") {
@@ -394,7 +403,7 @@ function executeDockerCommand(action: "pause" | "unpause" | "stop") {
     });
   });
 
-  selectedContainers.value = [];
+  containerSelection.value = {};
 }
 
 onBeforeUnmount(async () => {

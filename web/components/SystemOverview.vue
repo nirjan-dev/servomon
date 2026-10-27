@@ -4,7 +4,7 @@
       ><div class="flex flex-wrap justify-between items-center">
         <div class="flex items-center gap-2 flex-wrap">
           <span class="capitalize font-bold text-primary"> {{ name }}</span>
-          <span class="flex items-center gap-1.5 text-xs text-gray-500">
+          <span class="flex items-center gap-1.5 text-xs text-muted">
             <span class="inline-block w-2 h-2 rounded-full" :class="freshness.dotClass.value" />
             {{ freshness.label.value }}
           </span>
@@ -12,13 +12,13 @@
         <div class="flex items-center gap-4 flex-wrap">
           <span class="flex items-center gap-1">
             Alerts
-            <UToggle
-              @change="(value) => $emit('changeAlertToggle', value)"
+            <USwitch
               v-model="enableAlert"
+              @update:model-value="(value: boolean) => $emit('changeAlertToggle', value)"
             />
           </span>
           <UButton :to="link">View Details</UButton>
-          <UButton color="red" variant="soft" size="sm" @click="$emit('deleteSystem', name)">Delete</UButton>
+          <UButton color="error" variant="soft" @click="$emit('deleteSystem', name)">Delete</UButton>
         </div>
       </div>
     </template>
