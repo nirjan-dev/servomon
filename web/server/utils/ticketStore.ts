@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 // S1: short-lived handshake credentials. Both stores are in-memory, which is
 // safe only because the deployment runs a single machine
@@ -22,7 +22,8 @@ export type EnrollRequest = {
   createdAt: number;
   expiresAt: number;
   status: "pending" | "approved" | "denied";
-  token?: string; // plaintext, readable once by the polling agent
+  token?: string; // plaintext, readable once by the collecting agent
+  collectorHash?: string; // SHA-256 of the device-only collection secret
 };
 
 const tickets = new Map<string, WsTicket>();
@@ -62,7 +63,7 @@ export function sweepWsTickets(): void {
 
 const ENROLL_CODE_TTL_MS = 15 * 60 * 1000;
 const ENROLL_RATE_WINDOW_MS = 60 * 1000;
-const ENROLL_RATE_MAX = 10;
+const ENROLL_RATE_MAX = 30;
 
 export function enrollRateLimited(ip: string): boolean {
   return bucketRateLimited(enrollHitsByIp, ip, ENROLL_RATE_WINDOW_MS, ENROLL_RATE_MAX);
@@ -81,7 +82,6 @@ function bucketRateLimited(bucket: Map<string, number[]>, ip: string, windowMs: 
   bucket.set(ip, hits);
   return hits.length > max;
 }
-
 export function findPendingByAgent(agentId: string): EnrollRequest | null {
   const now = Date.now();
   for (const [code, record] of enrollments) {
@@ -94,8 +94,35 @@ export function findPendingByAgent(agentId: string): EnrollRequest | null {
   return null;
 }
 
+export function findPendingBySystem(system: string): EnrollRequest | null {
+  const now = Date.now();
+  for (const [code, record] of enrollments) {
+    if (record.expiresAt < now) {
+      enrollments.delete(code);
+      continue;
+    }
+    if (record.status === "pending" && record.system === system) return record;
+  }
+  return null;
+}
+
+export function hashCollectorSecret(secret: string): string {
+  return createHash("sha256").update(secret, "utf8").digest("hex");
+}
+
+export function verifyCollectorSecret(secret: string | undefined, stored: string | undefined): boolean {
+  if (!secret || !stored) return false;
+  const candidate = Buffer.from(hashCollectorSecret(secret), "hex");
+  const expected = Buffer.from(stored, "hex");
+  if (candidate.length !== expected.length) return false;
+  return timingSafeEqual(candidate, expected);
+}
+
 export function mintEnrollCode(input: { agentId: string; system: string; fingerprint: string }): EnrollRequest {
-  const code = randomBytes(6).toString("hex").toUpperCase();
+  let code = "";
+  do {
+    code = randomBytes(6).toString("hex").toUpperCase();
+  } while (enrollments.has(code));
   const now = Date.now();
   const record: EnrollRequest = {
     code,

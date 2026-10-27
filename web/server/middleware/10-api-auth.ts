@@ -24,6 +24,43 @@ function deny(event: Parameters<Parameters<typeof defineEventHandler>[0]>[0]): n
   throw createError({ statusCode: 401, statusMessage: "Authentication required" });
 }
 
+
+function forbidden(event: Parameters<Parameters<typeof defineEventHandler>[0]>[0]): never {
+  throw createError({ statusCode: 403, statusMessage: "Forbidden" });
+}
+
+// CSRF gate for browser-ambient operator credentials (cached Basic auth).
+// - When the browser sends Origin, it must match this host. Page scripts
+//   cannot forge Origin, so a match proves a same-origin initiator.
+// - Otherwise, operator POSTs must use application/json. Plain HTML forms
+//   can only send urlencoded/multipart/text bodies, and cross-origin
+//   fetch/XHR with a JSON body is stopped by CORS preflight (this server
+//   sends no CORS headers). PUT/PATCH/DELETE are unreachable cross-origin
+//   without a preflight, so the method itself is the signal there.
+// Non-browser clients (curl, scripts, tests) send neither Origin nor
+// Referer and pass with a JSON body on POST.
+function checkCsrf(event: Parameters<Parameters<typeof defineEventHandler>[0]>[0]): void {
+  const origin = getHeader(event, "origin");
+  if (origin) {
+    let originHost: string;
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      forbidden(event);
+    }
+    const host = (getHeader(event, "host") ?? getHeader(event, "x-forwarded-host") ?? "")
+      .split(",")[0]
+      .trim()
+      .toLowerCase();
+    if (!host || (originHost!).toLowerCase() !== host) forbidden(event);
+    return;
+  }
+  if (event.method === "POST") {
+    const contentType = (getHeader(event, "content-type") ?? "").split(";")[0].trim().toLowerCase();
+    if (contentType !== "application/json") forbidden(event);
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const pathname = event.path.split("?", 1)[0];
 
@@ -39,11 +76,17 @@ export default defineEventHandler(async (event) => {
 
   const allowedMethods = AGENT_AND_OPERATOR[pathname];
   if (allowedMethods?.includes(event.method)) {
-    if (authenticate(event)) return;
+    if (authenticate(event)) {
+      checkCsrf(event);
+      return;
+    }
     if (await authenticateAgent(bearerToken(getHeader(event, "authorization")))) return;
     deny(event);
   }
 
-  if (authenticate(event)) return;
+  if (authenticate(event)) {
+    if (event.method !== "GET" && event.method !== "HEAD") checkCsrf(event);
+    return;
+  }
   deny(event);
 });

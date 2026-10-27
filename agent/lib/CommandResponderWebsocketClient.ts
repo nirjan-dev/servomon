@@ -27,6 +27,9 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
         return;
       }
 
+      // Echo the server's correlation id so results match their command.
+      const commandId = typeof dataJSON.commandId === "string" ? dataJSON.commandId : undefined;
+
       let result: CommandResult | null = null;
       switch (parsedCommand.data.type) {
         case "process":
@@ -45,6 +48,7 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
           break;
       }
       if (result) {
+        if (commandId) result.data.commandId = commandId;
         this.sendCommandResult(result);
       }
     } catch (error) {

@@ -1,10 +1,14 @@
 // S1: agent onboarding. First run (no AGENT_TOKEN) generates a stable agent id
 // + keypair, prints a pairing code, and polls until the operator approves it
 // from the dashboard. The issued token is saved back to the agent's .env.
+//
+// Token collection is bound to this device: the request submits a random
+// collector secret (never displayed), and collection requires proving
+// knowledge of it. Knowing the public pairing code alone is not enough.
 
 export type EnrolledCredentials = { agentId: string; system: string; token: string };
 
-type StoredIdentity = { agentId: string; privateKey: string; publicKey: string };
+type StoredIdentity = { agentId: string; privateKey: string; publicKey: string; collectorSecret?: string };
 
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS = 15 * 60 * 1000;
@@ -34,11 +38,19 @@ async function loadOrCreateIdentity(dir: string): Promise<StoredIdentity> {
   return identity;
 }
 
+async function saveIdentity(dir: string, identity: StoredIdentity): Promise<void> {
+  const path = `${dir}/.servomon-identity.json`;
+  const tmpPath = `${path}.tmp`;
+  await Deno.writeTextFile(tmpPath, JSON.stringify(identity, null, 2), { mode: 0o600 });
+  await Deno.rename(tmpPath, path);
+  await Deno.chmod(path, 0o600);
+}
+
 function upsertEnvFile(dir: string, updates: Record<string, string>): Promise<void> {
   const path = `${dir}/.env`;
   return Deno.readTextFile(path)
     .catch(() => "")
-    .then((raw) => {
+    .then(async (raw) => {
       const lines = raw.split("\n");
       for (const [key, value] of Object.entries(updates)) {
         const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
@@ -46,18 +58,29 @@ function upsertEnvFile(dir: string, updates: Record<string, string>): Promise<vo
         if (idx >= 0) lines[idx] = line;
         else lines.push(line);
       }
-      return Deno.writeTextFile(path, lines.join("\n"));
+      // Atomic write: a crash mid-save must not leave a truncated token.
+      const tmpPath = `${path}.tmp`;
+      await Deno.writeTextFile(tmpPath, lines.join("\n"), { mode: 0o600 });
+      await Deno.rename(tmpPath, path);
+      await Deno.chmod(path, 0o600);
     });
 }
 
 export async function enrollAgent(serverUrl: string, system: string, dir: string): Promise<EnrolledCredentials> {
   const identity = await loadOrCreateIdentity(dir);
   const fingerprint = await sha256Hex(identity.publicKey);
+  if (!identity.collectorSecret) {
+    identity.collectorSecret = [...crypto.getRandomValues(new Uint8Array(32))]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    await saveIdentity(dir, identity);
+  }
+  const collectorSecret = identity.collectorSecret;
 
   const requestRes = await fetch(`${serverUrl}/api/enroll/request`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system, agentId: identity.agentId, fingerprint }),
+    body: JSON.stringify({ system, agentId: identity.agentId, fingerprint, collectorSecret }),
   });
   if (requestRes.status === 409) {
     throw new Error("System name already enrolled or pending — pick a different NAME.");
@@ -77,7 +100,9 @@ export async function enrollAgent(serverUrl: string, system: string, dir: string
   for (;;) {
     if (Date.now() > deadline) throw new Error("Enrollment timed out waiting for approval.");
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-    const pollRes = await fetch(`${serverUrl}/api/enroll/${code}`);
+    const pollRes = await fetch(`${serverUrl}/api/enroll/${code}`, {
+      headers: { Authorization: `Bearer ${collectorSecret}` },
+    });
     if (pollRes.status === 202) continue;
     if (pollRes.status === 410) throw new Error("Enrollment was denied or expired.");
     if (!pollRes.ok) throw new Error(`Enrollment poll failed with HTTP ${pollRes.status}`);

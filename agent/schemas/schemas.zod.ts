@@ -78,12 +78,14 @@ export const commandTypeSchema = z.union([
 
 export const baseCommandSchema = z.object({
   type: commandTypeSchema,
+  commandId: z.string().optional(),
 });
 
 export const baseCommandResultSchema = z.object({
   timestamp: z.number(),
   success: z.boolean(),
   error: z.string().optional(),
+  commandId: z.string().optional(),
 });
 
 export const processCommandSchema = baseCommandSchema.extend({

@@ -1,28 +1,39 @@
-// S1 regression suite — Servomon operator/control-plane authentication gap.
+// S1 regression suite — Servomon operator/control-plane authentication.
 //
-// Contract under test (post-fix behavior):
+// Contract under test:
 // - Every /api route denies anonymous callers (HTTP 401), except the public
 //   enrollment request + poll endpoints.
 // - Operator routes require HTTP Basic credentials from NUXT_BASIC_AUTH_USERS.
-// - Agents onboard via POST /api/enroll/request → operator approves from the
-//   dashboard → agent polls GET /api/enroll/:code for its one-time token.
+//   Unsafe operator methods additionally require a same-origin request
+//   (matching Origin) or, without Origin, a JSON body (403 otherwise).
+// - Agents onboard via POST /api/enroll/request (with a device-only collector
+//   secret) → operator approves from the dashboard → agent polls
+//   GET /api/enroll/:code, proving the collector secret to collect its token.
+//   Pairing code alone never yields the token. Pending names are reserved;
+//   approvals serialize so concurrent approves issue at most one enrollment.
 // - POST /api/metrics requires the enrolled agent's Bearer token; body.name
 //   must match the token's bound system (403 otherwise).
 // - /api/ws requires a single-use ticket from POST /api/ws-ticket (?ticket=...).
 //   Tickets bind role (operator|agent) and, for agents, the system name.
-// - Operators may send commands only to connected agents; agents can only return
-//   results; invalid commands are dropped; commands append to ./data/audit/audit.log.
+//   A present Origin must match the host (403 otherwise); upgrades to any
+//   other path are rejected at the transport layer (HTTP 401).
+// - Operators may send commands only to connected agents; commands carry a
+//   server-generated commandId. Agents can only return results matching an
+//   outstanding commandId; anything else is dropped. Messages over 64 KiB or
+//   past the per-connection rate limit close the socket.
+// - Decisions (forwarded/dropped), handshake accepts/rejects, violations, and
+//   abnormal disconnects append to the audit store; secrets are never logged.
 // - Removing an agent revokes its token and closes its sockets immediately.
 //
 // Modes:
 // - Local (default): requires `pnpm build` first. Spawns the production server on
 //   a random port with an isolated temp data dir and test credentials, runs the
-//   full suite, then kills the server.
+//   full suite serially in file order (some tests depend on earlier ones), then
+//   kills the server.
 // - Remote: SERVOMON_TEST_URL=https://... runs the read-only anonymous subset
 //   (safe against production; never sends state-changing requests).
 //
 // S1_DEBUG=1 streams server output.
-
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -31,9 +42,13 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import net from "node:net";
+import { createRequire } from "node:module";
 
+const require = createRequire(import.meta.url);
 const REMOTE = process.env.SERVOMON_TEST_URL?.replace(/\/$/, "");
 const LOCAL = !REMOTE;
+// `ws` client for tests needing custom handshake headers (Origin). Local only.
+const RawWebSocket = LOCAL ? require("ws") : null;
 
 const OPERATOR = { user: "testop", pass: "t3st-op-secret" };
 const SYS_A = "sys-a";
@@ -85,6 +100,31 @@ function tryConnect(url, timeoutMs = 5000) {
       resolve({ opened: false, ws, reason: "closed" });
     });
   });
+}
+// Raw connect via `ws` with custom handshake headers. Resolves
+// { opened, status, ws }. Local only.
+function tryConnectRaw(url, headers = {}, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    const ws = new RawWebSocket(url, { headers });
+    const timer = setTimeout(() => {
+      try { ws.terminate(); } catch {}
+      resolve({ opened: false, status: null, ws, reason: "timeout" });
+    }, timeoutMs);
+    ws.on("open", () => {
+      clearTimeout(timer);
+      resolve({ opened: true, status: 101, ws });
+    });
+    ws.on("unexpected-response", (_req, res) => {
+      clearTimeout(timer);
+      res.resume();
+      resolve({ opened: false, status: res.statusCode, ws });
+    });
+    ws.on("error", () => {});
+  });
+}
+
+function closeRaw(ws) {
+  try { ws.terminate(); } catch {}
 }
 
 function collect(ws) {
@@ -153,10 +193,11 @@ const enrolledCreds = new Map();
 
 async function enrollAgent(system, agentId) {
   const id = agentId ?? `test-${system}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const collectorSecret = `test-collector-secret-${id}`;
   const req = await fetch(`${base}/api/enroll/request`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system, agentId: id, fingerprint: `fp-${id}` }),
+    body: JSON.stringify({ system, agentId: id, fingerprint: `fp-${id}`, collectorSecret }),
   });
   assert.equal(req.status, 200, `enroll request for ${system} must be public`);
   const { code } = await req.json();
@@ -166,7 +207,9 @@ async function enrollAgent(system, agentId) {
     body: JSON.stringify({ code }),
   });
   assert.equal(approve.status, 200, `operator must approve ${system}`);
-  const poll = await fetch(`${base}/api/enroll/${code}`);
+  const poll = await fetch(`${base}/api/enroll/${code}`, {
+    headers: { authorization: bearer(collectorSecret) },
+  });
   assert.equal(poll.status, 200, `agent ${system} must collect its token`);
   return poll.json();
 }
@@ -555,11 +598,14 @@ test("operator command reaches its agent and the result comes back", { skip: !LO
     const cmd = { system: SYS_A, type: "docker", action: "stop", containerName: "poc-container" };
     op.ws.send(JSON.stringify(cmd));
     await waitFor(() => agentMsgs.length > 0, 3000, "agent never received the command");
-    assert.deepEqual(JSON.parse(agentMsgs[0]), cmd);
-    const result = { type: "docker", data: { success: true, timestamp: Date.now(), containerName: "poc-container" } };
+    const forwarded = JSON.parse(agentMsgs[0]);
+    assert.equal(typeof forwarded.commandId, "string");
+    assert.ok(forwarded.commandId.length > 0);
+    assert.deepEqual({ ...forwarded, commandId: undefined }, { ...cmd, commandId: undefined });
+    const result = { type: "docker", data: { success: true, timestamp: Date.now(), containerName: "poc-container", commandId: forwarded.commandId } };
     agent.ws.send(JSON.stringify(result));
     await waitFor(() => opMsgs.length > 0, 3000, "operator never received the result");
-    assert.deepEqual(JSON.parse(opMsgs[0]), result);
+    assert.deepEqual(JSON.parse(opMsgs[0]), { ...result, system: SYS_A });
   } finally {
     closeWs(agent.ws);
     closeWs(op.ws);
@@ -701,7 +747,7 @@ test("duplicate system name cannot enroll twice", { skip: !LOCAL && "needs crede
   const dup = await fetch(`${base}/api/enroll/request`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system: SYS_A, agentId: `dup-${Date.now()}`, fingerprint: "fp-dup-test" }),
+    body: JSON.stringify({ system: SYS_A, agentId: `dup-${Date.now()}`, fingerprint: "fp-dup-test", collectorSecret: "test-collector-secret-dup-000000000000" }),
   });
   await dup.text().catch(() => {});
   assert.equal(dup.status, 409);
@@ -711,7 +757,7 @@ test("denied enrollment yields no token", { skip: !LOCAL && "needs credentials: 
   const req = await fetch(`${base}/api/enroll/request`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system: "sys-deny", agentId: `deny-${Date.now()}`, fingerprint: "fp-deny-test" }),
+    body: JSON.stringify({ system: "sys-deny", agentId: `deny-${Date.now()}`, fingerprint: "fp-deny-test", collectorSecret: "test-collector-secret-deny-00000000000" }),
   });
   assert.equal(req.status, 200);
   const { code } = await req.json();
@@ -822,4 +868,345 @@ test("system delete rejects traversal names", { skip: !LOCAL && "needs credentia
     assert.equal(del.status, 200);
     assert.ok(body.includes("<!DOCTYPE html>"), `${name} must fall through to the SPA shell`);
   }
+});
+// ---------- enrollment hardening ----------
+
+test("operator approve rejects forged form posts (CSRF)", { skip: !LOCAL && "needs credentials: local only" }, async () => {
+  const target = `sys-csrf-${Date.now()}`;
+  const req = await fetch(`${base}/api/enroll/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system: target, agentId: `csrf-${Date.now()}`, fingerprint: "fp-csrf-test", collectorSecret: "test-collector-secret-csrf-00000000000" }),
+  });
+  assert.equal(req.status, 200);
+  const { code } = await req.json();
+  // A cross-site HTML form can attach Basic credentials but can only send
+  // urlencoded bodies; the JSON content-type rule must reject it.
+  const forged = await fetch(`${base}/api/enroll/approve`, {
+    method: "POST",
+    headers: { authorization: BASIC, "content-type": "application/x-www-form-urlencoded" },
+    body: `code=${code}`,
+  });
+  await forged.text().catch(() => {});
+  assert.equal(forged.status, 403);
+  // The request must still be pending, not approved.
+  const pending = await (await fetch(`${base}/api/enroll/pending`, { headers: { authorization: BASIC } })).json();
+  assert.ok(pending.some((p) => p.code === code), "forged approve must not consume the request");
+});
+
+test("operator approve rejects foreign Origin", { skip: !LOCAL && "needs credentials: local only" }, async () => {
+  const res = await fetch(`${base}/api/enroll/approve`, {
+    method: "POST",
+    headers: { authorization: BASIC, "content-type": "application/json", origin: "https://evil.example.invalid" },
+    body: JSON.stringify({ code: "NOPE" }),
+  });
+  await res.text().catch(() => {});
+  assert.equal(res.status, 403);
+});
+
+test("operator unsafe methods reject foreign Origin", { skip: !LOCAL && "needs credentials: local only" }, async () => {
+  for (const [method, path, body] of [
+    ["PUT", "/api/system-config", { system: SYS_A, enableAlerts: true }],
+    ["DELETE", "/api/metrics", { system: SYS_A, timestamp: 1 }],
+    ["POST", "/api/subscriptions", { endpoint: "https://example.com/poc" }],
+    ["DELETE", `/api/systems/${SYS_A}`, undefined],
+  ]) {
+    const res = await fetch(`${base}${path}`, {
+      method,
+      headers: { authorization: BASIC, "content-type": "application/json", origin: "https://evil.example.invalid" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    await res.text().catch(() => {});
+    assert.equal(res.status, 403, `${method} ${path} must reject foreign Origin`);
+  }
+});
+
+test("collection without the device secret is denied", { skip: !LOCAL && "needs credentials: local only" }, async () => {
+  const target = `sys-nosecret-${Date.now()}`;
+  const req = await fetch(`${base}/api/enroll/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system: target, agentId: `nosecret-${Date.now()}`, fingerprint: "fp-nosecret-test", collectorSecret: "test-collector-secret-real-00000000000" }),
+  });
+  assert.equal(req.status, 200);
+  const { code } = await req.json();
+  const approve = await fetch(`${base}/api/enroll/approve`, {
+    method: "POST",
+    headers: { authorization: BASIC, "content-type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  assert.equal(approve.status, 200);
+  // Knowing the public pairing code alone must not yield the token.
+  const anon = await fetch(`${base}/api/enroll/${code}`);
+  await anon.text().catch(() => {});
+  assert.equal(anon.status, 401);
+  const wrong = await fetch(`${base}/api/enroll/${code}`, {
+    headers: { authorization: bearer("test-collector-secret-wrong-0000000000") },
+  });
+  await wrong.text().catch(() => {});
+  assert.equal(wrong.status, 401);
+  // The legitimate collector still succeeds afterward.
+  const legit = await fetch(`${base}/api/enroll/${code}`, {
+    headers: { authorization: bearer("test-collector-secret-real-00000000000") },
+  });
+  assert.equal(legit.status, 200);
+  assert.equal(legit.headers.get("cache-control"), "no-store");
+  const body = await legit.json();
+  assert.equal(body.system, target);
+  assert.ok(typeof body.token === "string" && body.token.length > 0);
+});
+
+test("re-requesting metadata does not disclose collection", { skip: !LOCAL && "needs credentials: local only" }, async () => {
+  const target = `sys-rereq-${Date.now()}`;
+  const agentId = `rereq-${Date.now()}`;
+  const first = await fetch(`${base}/api/enroll/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system: target, agentId, fingerprint: "fp-rereq-test", collectorSecret: "test-collector-secret-first-0000000000" }),
+  });
+  assert.equal(first.status, 200);
+  const { code } = await first.json();
+  // Same public metadata, different secret: returns the same code but the
+  // attacker's secret is NOT bound, so they still cannot collect.
+  const replay = await fetch(`${base}/api/enroll/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system: target, agentId, fingerprint: "fp-rereq-test", collectorSecret: "test-collector-secret-evil-000000000000" }),
+  });
+  assert.equal(replay.status, 200);
+  assert.equal((await replay.json()).code, code);
+  const approve = await fetch(`${base}/api/enroll/approve`, {
+    method: "POST",
+    headers: { authorization: BASIC, "content-type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  assert.equal(approve.status, 200);
+  const evil = await fetch(`${base}/api/enroll/${code}`, {
+    headers: { authorization: bearer("test-collector-secret-evil-000000000000") },
+  });
+  await evil.text().catch(() => {});
+  assert.equal(evil.status, 401);
+  const legit = await fetch(`${base}/api/enroll/${code}`, {
+    headers: { authorization: bearer("test-collector-secret-first-0000000000") },
+  });
+  assert.equal(legit.status, 200);
+  await legit.text().catch(() => {});
+});
+
+test("duplicate pending system name is rejected", { skip: !LOCAL && "needs credentials: local only" }, async () => {
+  const target = `sys-penddup-${Date.now()}`;
+  const first = await fetch(`${base}/api/enroll/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system: target, agentId: `penddup-a-${Date.now()}`, fingerprint: "fp-penddup-a", collectorSecret: "test-collector-secret-pend-a-00000000" }),
+  });
+  assert.equal(first.status, 200);
+  const second = await fetch(`${base}/api/enroll/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system: target, agentId: `penddup-b-${Date.now()}`, fingerprint: "fp-penddup-b", collectorSecret: "test-collector-secret-pend-b-00000000" }),
+  });
+  await second.text().catch(() => {});
+  assert.equal(second.status, 409);
+});
+
+test("enrolled agent id cannot be reused", { skip: !LOCAL && "needs credentials: local only" }, async () => {
+  const existing = await enrolled(SYS_A);
+  const req = await fetch(`${base}/api/enroll/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system: `sys-idreuse-${Date.now()}`, agentId: existing.agentId, fingerprint: "fp-idreuse-test", collectorSecret: "test-collector-secret-reuse-000000000" }),
+  });
+  await req.text().catch(() => {});
+  assert.equal(req.status, 409);
+});
+
+test("concurrent approvals issue at most one enrollment", { skip: !LOCAL && "needs credentials: local only" }, async () => {
+  const req = await fetch(`${base}/api/enroll/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system: `sys-race-${Date.now()}`, agentId: `race-${Date.now()}`, fingerprint: "fp-race-test", collectorSecret: "test-collector-secret-race-00000000000" }),
+  });
+  assert.equal(req.status, 200);
+  const { code } = await req.json();
+  const approve = () =>
+    fetch(`${base}/api/enroll/approve`, {
+      method: "POST",
+      headers: { authorization: BASIC, "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+  const [a1, a2] = await Promise.all([approve(), approve()]);
+  const statuses = [a1.status, a2.status].sort();
+  await a1.text().catch(() => {});
+  await a2.text().catch(() => {});
+  assert.deepEqual(statuses, [200, 410]);
+});
+// ---------- websocket hardening ----------
+
+test("upgrade on non-command paths is rejected", { skip: !LOCAL && "local only" }, async () => {
+  for (const path of ["/no-such-socket", "/", "/api/other-socket"]) {
+    const conn = await tryConnectRaw(`${wsBase()}${path}`);
+    closeRaw(conn.ws);
+    assert.equal(conn.opened, false, `${path} must not open a socket`);
+    assert.ok(conn.status === 401 || conn.status === 404, `${path} got HTTP ${conn.status}`);
+  }
+});
+
+test("handshake with foreign Origin is rejected", { skip: !LOCAL && "local only" }, async () => {
+  const { body } = await postTicket({ basic: BASIC });
+  assert.ok(body?.ticket, "ticket required");
+  const conn = await tryConnectRaw(`${wsBase()}/api/ws?ticket=${body.ticket}`, {
+    Origin: "https://evil.example.invalid",
+  });
+  closeRaw(conn.ws);
+  assert.equal(conn.opened, false, "foreign Origin must not open");
+  assert.equal(conn.status, 403);
+});
+
+test("handshake with matching Origin is accepted", { skip: !LOCAL && "local only" }, async () => {
+  const { body } = await postTicket({ basic: BASIC });
+  assert.ok(body?.ticket, "ticket required");
+  const origin = base.replace("http://", "http://");
+  const conn = await tryConnectRaw(`${wsBase()}/api/ws?ticket=${body.ticket}`, { Origin: origin });
+  closeRaw(conn.ws);
+  assert.equal(conn.opened, true, "matching Origin must open");
+});
+
+test("handshake without Origin is accepted (non-browser clients)", { skip: !LOCAL && "local only" }, async () => {
+  const creds = await enrolled(SYS_A);
+  const ticket = (await postTicket({ token: creds.token })).body?.ticket;
+  assert.ok(ticket, "ticket required");
+  const conn = await tryConnectRaw(`${wsBase()}/api/ws?type=server&name=${SYS_A}&ticket=${ticket}`);
+  closeRaw(conn.ws);
+  assert.equal(conn.opened, true, "agent without Origin must open");
+});
+
+test("oversize message is rejected and socket closed", { skip: !LOCAL && "local only" }, async () => {
+  const opTicket = (await postTicket({ basic: BASIC })).body?.ticket;
+  assert.ok(opTicket, "ticket required");
+  const ws = new RawWebSocket(`${wsBase()}/api/ws?ticket=${opTicket}`);
+  const closed = new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 5000);
+    ws.on("close", (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
+    ws.on("error", () => {});
+  });
+  await new Promise((resolve, reject) => {
+    ws.on("open", resolve);
+    ws.on("error", reject);
+  });
+  ws.send(JSON.stringify({ system: SYS_A, type: "docker", action: "stop", containerName: "x".repeat(70 * 1024) }));
+  const code = await closed;
+  closeRaw(ws);
+  assert.ok(code === 4409 || code === 1009, `oversize message must close the socket, got ${code}`);
+});
+
+test("message flood is rate limited", { skip: !LOCAL && "local only" }, async () => {
+  const opTicket = (await postTicket({ basic: BASIC })).body?.ticket;
+  assert.ok(opTicket, "ticket required");
+  const ws = new RawWebSocket(`${wsBase()}/api/ws?ticket=${opTicket}`);
+  const closed = new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 8000);
+    ws.on("close", (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
+    ws.on("error", () => {});
+  });
+  await new Promise((resolve, reject) => {
+    ws.on("open", resolve);
+    ws.on("error", reject);
+  });
+  for (let i = 0; i < 60; i++) {
+    ws.send(JSON.stringify({ ping: i }));
+    await sleep(20);
+  }
+  const code = await closed;
+  closeRaw(ws);
+  assert.equal(code, 4408, `flood must close the socket with 4408, got ${code}`);
+});
+
+test("unsolicited agent result is dropped", { skip: !LOCAL && "local only" }, async () => {
+  const creds = await enrolled(SYS_A);
+  const agentTicket = (await postTicket({ token: creds.token })).body?.ticket;
+  const opTicket = (await postTicket({ basic: BASIC })).body?.ticket;
+  assert.ok(agentTicket && opTicket, "tickets required");
+  const agent = await tryConnect(`${wsBase()}/api/ws?type=server&name=${SYS_A}&ticket=${agentTicket}`);
+  assert.equal(agent.opened, true);
+  const op = await tryConnect(`${wsBase()}/api/ws?ticket=${opTicket}`);
+  assert.equal(op.opened, true);
+  const opMsgs = collect(op.ws);
+  try {
+    agent.ws.send(JSON.stringify({ type: "docker", data: { success: true, timestamp: Date.now(), containerName: "poc-container", commandId: "never-issued-by-server" } }));
+    await sleep(1200);
+    assert.deepEqual(opMsgs, [], "unsolicited result must not fan out");
+  } finally {
+    closeWs(agent.ws);
+    closeWs(op.ws);
+  }
+});
+
+test("duplicate result delivery is dropped", { skip: !LOCAL && "local only" }, async () => {
+  const creds = await enrolled(SYS_A);
+  const fixture = metricsFixture(SYS_A);
+  fixture.containersInfo = [{ memoryUsedPercent: "10", memoryUsed: "100MB", cpuUsed: "5", name: "poc-container", id: "abc", state: "running" }];
+  const posted = await fetch(`${base}/api/metrics`, {
+    method: "POST",
+    headers: { authorization: bearer(creds.token), "content-type": "application/json" },
+    body: JSON.stringify(fixture),
+  });
+  assert.equal(posted.status, 200);
+  const agentTicket = (await postTicket({ token: creds.token })).body?.ticket;
+  const opTicket = (await postTicket({ basic: BASIC })).body?.ticket;
+  assert.ok(agentTicket && opTicket, "tickets required");
+  const agent = await tryConnect(`${wsBase()}/api/ws?type=server&name=${SYS_A}&ticket=${agentTicket}`);
+  assert.equal(agent.opened, true);
+  const agentMsgs = collect(agent.ws);
+  const op = await tryConnect(`${wsBase()}/api/ws?ticket=${opTicket}`);
+  assert.equal(op.opened, true);
+  const opMsgs = collect(op.ws);
+  try {
+    op.ws.send(JSON.stringify({ system: SYS_A, type: "docker", action: "stop", containerName: "poc-container" }));
+    await waitFor(() => agentMsgs.length > 0, 3000, "agent never received the command");
+    const commandId = JSON.parse(agentMsgs[0]).commandId;
+    assert.ok(commandId, "forwarded command must carry commandId");
+    const result = JSON.stringify({ type: "docker", data: { success: true, timestamp: Date.now(), containerName: "poc-container", commandId } });
+    agent.ws.send(result);
+    await waitFor(() => opMsgs.length > 0, 3000, "operator never received the result");
+    agent.ws.send(result);
+    await sleep(1000);
+    assert.equal(opMsgs.length, 1, "duplicate result must not fan out twice");
+  } finally {
+    closeWs(agent.ws);
+    closeWs(op.ws);
+  }
+});
+
+test("handshake decisions are audit-logged without secrets", { skip: !LOCAL && "local only" }, async () => {
+  const { body } = await postTicket({ basic: BASIC });
+  assert.ok(body?.ticket, "ticket required");
+  const ok = await tryConnectRaw(`${wsBase()}/api/ws?ticket=${body.ticket}`, { Origin: base });
+  closeRaw(ok.ws);
+  assert.equal(ok.opened, true);
+  const bad = await tryConnectRaw(`${wsBase()}/api/ws`);
+  closeRaw(bad.ws);
+  assert.equal(bad.opened, false);
+  const { readdir } = await import("node:fs/promises");
+  const auditDir = join(dataDir, "data", "audit");
+  const files = await readdir(auditDir);
+  const entries = [];
+  for (const file of files) {
+    entries.push(JSON.parse(await readFile(join(auditDir, file), "utf8")));
+  }
+  const accepted = entries.filter((e) => e.event === "handshake-accepted");
+  const rejected = entries.filter((e) => e.event === "handshake-rejected");
+  assert.ok(accepted.length > 0, "expected handshake-accepted audit entries");
+  assert.ok(rejected.length > 0, "expected handshake-rejected audit entries");
+  assert.ok(accepted.every((e) => e.role && ("ip" in e)), "accepted entries need role + ip");
+  assert.ok(rejected.every((e) => e.reason && ("ip" in e)), "rejected entries need reason + ip");
+  const serialized = JSON.stringify(entries);
+  assert.ok(!serialized.includes(body.ticket), "audit log must not contain ticket values");
+  assert.ok(!serialized.includes(OPERATOR.pass), "audit log must not contain passwords");
 });

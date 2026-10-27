@@ -77,7 +77,9 @@ The server takes the agent's system name from the token, never from the request.
 
 ```mermaid
 flowchart TD
-    A["Upgrade request: GET /api/ws"] --> B{"ticket query parameter present?"}
+    A["Upgrade request: GET /api/ws"] --> O{"Origin present and matches host?"}
+    O -- no --> R0["HTTP 403"]
+    O -- yes --> B{"ticket query parameter present?"}
     B -- no --> R1["HTTP 401"]
     B -- yes --> C["consumeWsTicket: look up and delete"]
     C --> D{"found and not expired?"}
@@ -93,7 +95,9 @@ flowchart TD
     H -- yes --> OK2["101: agent connection, replaces any older socket for that system"]
 ```
 
-The hook deletes the ticket before any role or system check runs. A ticket presented with the wrong role or system is therefore used up, and a retry with it gets HTTP 401.
+The hook deletes the ticket before any role or system check runs. A ticket presented with the wrong role or system is therefore used up, and a retry with it gets HTTP 401. Every accept and reject is audit-logged with the client IP, `Origin`, and reason; ticket values are never logged. The whole hook runs inside try/catch so an internal failure answers HTTP 500 instead of leaking the raw socket.
+
+Upgrades to any path other than `/api/ws` never reach this hook: a Nitro plugin (`web/server/plugins/10-ws-limits.ts`) injects `verifyClient` into the WebSocket server, which rejects them with HTTP 401. Without that gate, crossws would accept such upgrades with an empty hook set — no ticket check, sockets held indefinitely.
 
 ### Ticket lifecycle
 
@@ -104,14 +108,14 @@ stateDiagram-v2
     Minted --> Consumed: presented at upgrade, deleted from store
     Minted --> Swept: TTL passed unused, removed on a later mint
     Consumed --> Rejected: expired, wrong role or system, agent removed
-    Consumed --> Pending: checks passed, HTTP 101
-    Pending --> Session: open() binds the role to peer.id
+    Consumed --> Bound: checks passed, role attached via upgrade context
+    Bound --> Session: HTTP 101, open() registers the peer
     Session --> [*]: socket closes
     Rejected --> [*]
     Swept --> [*]
 ```
 
-`Pending` exists because the installed crossws (0.3.1, pulled in by Nitro 2.10) gives `upgrade` no per-connection context: the peer id that later hooks use doesn't exist yet when `upgrade` runs. `upgrade` stores the checked ticket in `pendingTickets`, and `open` moves it onto the peer. Newer crossws releases let `upgrade` return a `context` object that later hooks read as `peer.context` ([crossws hooks](https://crossws.h3.dev/guide/hooks)). After upgrading, that object could replace the map.
+The checked ticket travels from `upgrade` to `open` via crossws context: the hook returns `{ context: { ticket } }` and `open` reads it as `peer.context` ([crossws hooks](https://crossws.h3.dev/guide/hooks)). crossws is pinned to 0.4.16 via a pnpm override, which also vendors a patched `ws` receiver (fragment/chunk memory-exhaustion and `close()` memory-disclosure fixes).
 
 ### Ticket properties
 
@@ -128,20 +132,25 @@ stateDiagram-v2
 
 ### After the handshake
 
-Each connection's role determines what it may send. Validation happens on every message, not just at connect time.
+Each connection's role determines what it may send. Validation happens on every message, not just at connect time. Before any parsing, each message passes three gates: a 64 KiB byte cap (larger messages close the socket), a per-connection rate limit (100 messages/minute with a burst of 20), and liveness tracking.
 
 | Role | May send | Server action |
 |---|---|---|
-| operator | `kill` with a pid of 1 to 7 digits, or `docker stop/pause/unpause` for a container the target agent has reported in its stored metrics | Forwards the command only to the live agent socket for `system`. The decision is audit-logged whether it's forwarded or dropped |
-| agent | Command results matching `commandResultSchema` | Sends the result to every operator socket. Anything else is dropped, so agents can't command each other |
+| operator | `kill` with a pid of 1 to 7 digits, or `docker stop/pause/unpause` for a container the target agent has reported in its stored metrics | Forwards the command only to the live agent socket for `system`, stamped with a server-generated `commandId`. The decision is audit-logged whether it's forwarded or dropped |
+| agent | Command results matching `commandResultSchema` **with a `commandId` matching an outstanding forwarded command** | Sends the result to every operator socket with the agent's `system` attached. Anything else — malformed, unsolicited, duplicate, or for another system — is dropped, so agents can't command each other or forge results |
+
+Outstanding command ids expire after 5 minutes. Operator credentials are revalidated every 30 minutes: an operator removed from `NUXT_BASIC_AUTH_USERS` has their socket closed. (Password rotation takes effect on redeploy, which drops all sockets.)
+
+Dead and idle sockets don't linger: the server pings every 30 seconds, terminates peers that miss a pong, and closes sockets idle for 10 minutes. Fan-out checks each operator's buffered bytes and drops slow consumers past 256 KiB rather than queueing unbounded memory. At most 20 operator sockets may be open at once.
 
 | Close or status | Meaning |
 |---|---|
-| HTTP 401 at handshake | Ticket missing, unknown, already used or expired |
-| HTTP 403 at handshake | Role or system mismatch, or the agent is no longer enrolled |
+| HTTP 401 at handshake | Ticket missing, unknown, already used or expired; or an upgrade to any path other than `/api/ws` |
+| HTTP 403 at handshake | `Origin` mismatch, role or system mismatch, or the agent is no longer enrolled |
 | 4401 | The socket opened without a session (defensive; shouldn't happen in normal use) |
 | 4403 | The agent was removed from the dashboard while connected |
-| 4409 | A newer connection for the same system replaced this one |
+| 4408 | Session expired: idle timeout, heartbeat timeout, rate limit, slow consumer, or revoked operator |
+| 4409 | A newer connection for the same system replaced this one, or a message exceeded 64 KiB |
 
 A failed handshake gives the client no HTTP status to read. The `WebSocket` API reports only an error and close code 1006. Authentication failures therefore show up at the ticket-mint step, which is a normal HTTP request with a readable status. That's where the agent logs `WS ticket mint failed with HTTP 401`.
 
@@ -167,19 +176,21 @@ The attacker's page can make the operator's browser request a ticket, but it can
 ### Benefits
 
 - Long-lived credentials never appear in a URL.
-- Bad connections are refused before the handshake completes, so the server never holds unauthenticated sockets or needs an authentication timeout.
-- CSWSH is blocked without depending on cookies or the `Origin` header.
+- Bad connections are refused before the handshake completes, so the server never holds unauthenticated sockets or needs an authentication timeout. Upgrades to paths other than `/api/ws` are rejected at the transport layer.
+- CSWSH is blocked twice over: the ticket is an unpredictable handshake value, and a present `Origin` must match the host.
 - The browser and the agent use one code path: `resolveUrl` in `shared/lib/WebsocketClient.ts`.
-- Revocation is checked on every connect. An agent removed from the dashboard can't mint tickets, and its open sockets are closed with 4403.
+- Revocation is checked on every connect and re-checked during the session. An agent removed from the dashboard can't mint tickets, and its open sockets are closed with 4403; a removed operator's sockets close on the next revalidation window.
 - The server sets each connection's identity. A `name` in the URL is checked against the ticket and never trusted on its own.
+- Commands and results are correlated: every forwarded command carries a server-generated `commandId`, and results without a matching outstanding id are dropped — no forged or replayed results reach the dashboard.
+- Resource use is bounded: 64 KiB messages, per-connection rate limits, heartbeats with idle cleanup, backpressure-checked fan-out, and a cap on operator sockets.
 
 ### Costs
 
 - **An extra HTTP round trip** on every connect and reconnect.
-- **Server-side state.** Tickets live in one process's memory, so Servomon must run as a single instance (`web/fly.toml` pins one machine). A restart drops outstanding tickets; clients just mint new ones.
+- **Server-side state.** Tickets, sessions, and outstanding commands live in one process's memory, so Servomon must run as a single instance (`web/fly.toml` pins one machine). A restart drops outstanding tickets; clients just mint new ones.
 - **Tickets still reach any log that records full URLs.** Usually the logged request is the one that used the ticket, so a ticket read from a log has already been spent. The exception is a proxy that logs the URL but never delivers the request to the app (upstream down, timeout). That ticket stays valid until its TTL runs out, so someone reading logs in real time could replay it within 60 s.
-- **The hooks need shared state.** The ticket check runs in `upgrade`, but the session is bound in `open`, so the two share the `pendingTickets` map.
-- **No re-authentication mid-connection.** A connection keeps its role until it closes.
+- **A Nitro plugin reaches into internals.** `10-ws-limits.ts` mutates the cached `h3App.websocket` object to pass `serverOptions` to the adapter. Verified against the installed Nitro/crossws sources, but it depends on undocumented wiring that a major upgrade could move.
+- **Stale agents lose results.** Agents older than the `commandId` change send results without correlation ids, which the server drops. Agents must be redeployed with the server.
 
 ### Where the guides disagree
 
@@ -217,27 +228,27 @@ Servomon accepts the URL risk because the ticket is single-use and expires in 60
 
 ## Known gaps and possible hardening
 
-These were deliberately left out of S1. Each one is small to add if the threat model calls for it.
+1. **No rate limiting on handshake attempts or ticket minting.** Minting requires a valid credential, and guessing a ticket is infeasible, so the risk is resource use rather than access. Per-connection message limits exist; handshake floods rely on Fly edge protections.
+2. **Tickets aren't tied to the client's IP address.** Ronacher and Heroku both mention storing the IP on the ticket. With a single-use, 60 s ticket the gain is small, and proxies and mobile networks make IP checks brittle.
+3. **`kill` checks the pid format but not existence.** The pid isn't checked against the processes the agent reported. Docker commands, by contrast, must name a container the agent has reported.
+4. **No per-agent connection cap.** One agent socket exists per system by replacement, but nothing stops many systems' agents from connecting at once. The operator side is capped at 20.
 
-1. **No `Origin` allowlist.** OWASP recommends checking `Origin` on every handshake. Tickets already block CSWSH, but a cheap extra layer for browser connections is to reject any handshake whose `Origin` is present and isn't the app's own. Agents send no `Origin` (verified with Deno 2.9.8), so they're unaffected.
-2. **Rejected handshakes aren't logged.** Audit entries cover operator command decisions only. OWASP recommends also logging authentication events at the handshake.
-3. **No rate limiting** on handshake attempts or ticket minting. Minting requires a valid credential, and guessing a ticket is infeasible, so the risk is resource use rather than access.
-4. **`pendingTickets` is only cleared in `open`.** A handshake that passes `upgrade` but never reaches `open` leaves an entry behind. Creating one requires a valid ticket.
-5. **Operator sockets aren't re-validated during a session.** Operator credentials come from the environment and change only on restart, and a restart drops every socket. Per-user revocation would need periodic re-validation, which OWASP suggests every 30 minutes or so.
-6. **Tickets aren't tied to the client's IP address.** Ronacher and Heroku both mention storing the IP on the ticket. With a single-use, 60 s ticket the gain is small, and proxies and mobile networks make IP checks brittle.
-7. **`kill` checks the pid format but not existence.** The pid isn't checked against the processes the agent reported. Docker commands, by contrast, must name a container the agent has reported.
+Fixed by the hardening pass: `Origin` allowlist on the handshake, handshake/violation/error audit logging with identity/IP/Origin, 64 KiB message caps (transport + app), per-connection rate limits, heartbeats with idle cleanup, backpressure-checked fan-out, command/result correlation with replay rejection, operator credential revalidation, non-`/api/ws` upgrade rejection, and the patched `ws` receiver via the crossws 0.4.16 override.
 
 ## Code map
 
 | File | Role in the ticket flow |
 |---|---|
 | `web/server/middleware/10-api-auth.ts` | Lets `Upgrade: websocket` requests through to the upgrade hook, denies plain HTTP on `/api/ws`, requires Basic or Bearer on `/api/ws-ticket` |
+| `web/server/plugins/10-ws-limits.ts` | Injects `maxPayload: 64 KiB` and path-restricting `verifyClient` into the WebSocket server before the adapter is built |
 | `web/server/api/ws-ticket.post.ts` | Works out which principal is calling and mints the matching ticket |
 | `web/server/utils/ticketStore.ts` | Mint, consume (single-use), TTL, sweep |
-| `web/server/api/ws.ts` | `upgrade` checks; `open` binds the session; `message` applies the role rules and writes the audit log; `close` cleans up |
+| `web/server/api/ws.ts` | `upgrade` checks (Origin, ticket, role); `open` binds the session; `message` applies size/rate/correlation/role rules and writes the audit log; `pong`/`error`/`close` handle liveness and teardown |
 | `shared/lib/WebsocketClient.ts`, `web/shared/lib/WebsocketClient.ts` | `resolveUrl` mints a new ticket on every connection attempt |
 | `web/pages/systems/[name].vue` | The dashboard's ticket request |
 | `agent/main.ts` | The agent's ticket request |
+| `agent/lib/CommandResponderWebsocketClient.ts` | Echoes the server's `commandId` in results so they correlate |
+| `shared/types.ts` (+ generated zod schemas) | Optional `commandId` on commands and results |
 
 ## Tests
 
@@ -247,7 +258,7 @@ These were deliberately left out of S1. Each one is small to add if the threat m
 - Minting: `operator can mint a WS ticket`, `agent can mint a WS ticket bound to its system`, `WS ticket with wrong operator password is rejected`, `WS ticket with wrong agent token is rejected`
 - Ticket rules: `WS ticket is single-use`, `expired WS ticket is rejected` (the suite uses a 2 s TTL), `agent ticket cannot connect as another system`, `operator ticket cannot connect as an agent`
 - After the handshake: `operator command reaches its agent and the result comes back`, `agent cannot send commands to another agent`, `removed agent loses token and socket immediately`
-
+- Hardening: `upgrade on non-command paths is rejected`, `handshake with foreign Origin is rejected`, `handshake with matching Origin is accepted`, `handshake without Origin is accepted (non-browser clients)`, `oversize message is rejected and socket closed`, `message flood is rate limited`, `unsolicited agent result is dropped`, `duplicate result delivery is dropped`, `handshake decisions are audit-logged without secrets`
 ## Further reading
 
 - [websocket.org: WebSocket Authentication](https://websocket.org/guides/authentication/): URL parameter vs cookie vs first-message authentication, token renewal, revocation.

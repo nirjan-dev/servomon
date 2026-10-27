@@ -78,12 +78,14 @@ export type CommandType =
 // Base Interfaces
 export interface BaseCommand {
   type: CommandType;
+  commandId?: string;
 }
 
 export interface BaseCommandResult {
   timestamp: number;
   success: boolean;
   error?: string;
+  commandId?: string;
 }
 
 // Shell Commands
