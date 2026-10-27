@@ -60,11 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  type ContainerInfo,
-  type Metrics,
-  type ProcessInfo,
-} from "@global-shared/types";
+import type { ContainerInfo, Metrics, ProcessInfo } from "../../../shared/types";
 import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebsocketClient";
 import { useFreshness } from "~/composables/useFreshness";
 const metrics = ref<Metrics[]>([]);

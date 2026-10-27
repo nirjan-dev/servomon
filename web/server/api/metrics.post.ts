@@ -1,4 +1,4 @@
-import { Metrics } from "../../../shared/types";
+import type { Metrics } from "../../../shared/types";
 
 import { metricsSchema } from "~/shared/schemas.zod";
 import { authenticate, authenticateAgent, bearerToken } from "../utils/auth";

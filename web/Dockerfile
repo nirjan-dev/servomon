@@ -29,7 +29,8 @@ RUN apt-get update -qq && \
 COPY .npmrc package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod=false
 
-# Copy application code
+# Copy application code. The build context is web/ only (flyctl deploy ./web),
+# so repo-root shared/ is absent here: web code may only `import type` from it.
 COPY . .
 
 # Build application
