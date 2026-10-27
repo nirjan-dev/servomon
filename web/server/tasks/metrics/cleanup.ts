@@ -1,4 +1,5 @@
-const MIN_METRICS_TO_KEEP = 5;
+import { listSystems } from "../../utils/metricsStore";
+
 
 export default defineTask({
   meta: {
@@ -8,7 +9,7 @@ export default defineTask({
   async run() {
     console.log("Cleaning up old metrics");
 
-    const systems = (await $fetch("/api/sytems")) ?? [];
+    const systems = await listSystems();
 
     systems.forEach((system) => {
       cleanupForSystem(system);

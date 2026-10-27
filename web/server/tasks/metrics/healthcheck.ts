@@ -1,3 +1,5 @@
+import { getMetricsForSystem, listSystems } from "../../utils/metricsStore";
+
 interface ServerStateKV {
   live: boolean;
 }
@@ -29,7 +31,7 @@ export default defineTask({
     description: "Healthcheck for metrics",
   },
   async run() {
-    const systems = (await $fetch("/api/sytems")) ?? [];
+    const systems = await listSystems();
 
     systems.forEach((system) => {
       healthCheckForSystem(system);
@@ -40,21 +42,17 @@ export default defineTask({
 });
 
 async function healthCheckForSystem(system: string) {
-  const metricsResponse = await $fetch("/api/metrics", {
-    params: {
-      system,
-    },
-  });
+  const { count, metrics } = await getMetricsForSystem(system);
+
 
   let serverState =
     await useStorage("serverState").getItem<ServerStateKV>(system);
   let isServerLive: boolean;
 
   if (
-    !metricsResponse ||
-    metricsResponse.count === 0 ||
+    count === 0 ||
     !isWithinGivenMinutesOfCurrentTime(
-      metricsResponse.metrics[0].timestamp,
+      metrics[0].timestamp,
       MIN_TO_CHECK_UPTIME
     )
   ) {

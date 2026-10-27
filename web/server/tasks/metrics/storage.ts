@@ -1,3 +1,5 @@
+import { getMetricsForSystem, listSystems } from "../../utils/metricsStore";
+
 const storageAlertThreshold = 80;
 
 export default defineTask({
@@ -7,7 +9,7 @@ export default defineTask({
       "Checks used storage percent and sends alert if it exceeds the set threshold",
   },
   async run(_event) {
-    const systems = (await $fetch("/api/sytems")) ?? [];
+    const systems = await listSystems();
 
     systems.forEach((system) => {
       checkStorageForSystem(system);
@@ -17,17 +19,13 @@ export default defineTask({
   },
 });
 async function checkStorageForSystem(system: string) {
-  const metricsResponse = await $fetch("/api/metrics", {
-    params: {
-      system,
-    },
-  });
+  const { metrics } = await getMetricsForSystem(system);
 
-  if (!metricsResponse || !metricsResponse.metrics.length) {
+  if (!metrics.length) {
     return;
   }
 
-  const latestMetric = metricsResponse.metrics[0];
+  const latestMetric = metrics[0];
 
   latestMetric.disk.forEach((diskStats) => {
     if (diskStats.usedPercentage >= storageAlertThreshold) {

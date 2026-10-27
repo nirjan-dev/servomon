@@ -1,4 +1,5 @@
 import { PushSubscribersService } from "~/server/services/pushSubscribers.service";
+import { getSystemConfig } from "../../utils/metricsStore";
 import webpush from "web-push";
 
 export default defineTask({
@@ -9,11 +10,8 @@ export default defineTask({
   async run({ payload: { message, system } }) {
     let alertMessage: string = (message as string) ?? "alert message not sent";
 
-    const systemConfig = await $fetch("/api/system-config", {
-      params: {
-        system,
-      },
-    });
+    const systemConfig = await getSystemConfig(system as string);
+
 
     if (systemConfig?.enableAlerts === false) {
       console.log("skipped alert because alerts disabled for " + system);

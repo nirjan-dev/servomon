@@ -6,7 +6,7 @@ Servomon helps you monitor Linux servers through an easy-to-use web app. It cons
 
 ## Key Features
 
-- **Secure**: Servers can remain completely local - perfect for homelab setups
+- **Secure by default**: the dashboard and API require an operator login; each agent gets its own token via dashboard approval (see "Adding an agent"); WebSocket connections use single-use handshake tickets ([how they work and why](docs/websocket-auth.md)) and every forwarded command is audit-logged
 - **Comprehensive Monitoring**:
   - Memory usage
   - Network performance (speed, errors, drops)
@@ -44,14 +44,31 @@ Servomon helps you monitor Linux servers through an easy-to-use web app. It cons
 #### Option 2: Fly.io Deploy
 1. Edit `fly.toml` as needed
 2. Create data volume: `fly volumes create data`
-3. Deploy: `fly deploy`
+3. Set secrets: `fly secrets set NUXT_BASIC_AUTH_USERS="you:strong-password"`
+4. Deploy: `fly deploy`
+
+> Fly.io terminates TLS for `*.fly.dev` automatically. If you self-host elsewhere, serve the app behind TLS (Caddy, Tailscale Serve, Cloudflare Tunnel, …) — agent tokens travel in HTTP headers and must never cross the network in cleartext.
 
 ### Agent Setup
 
 1. Download the binary from `/agent/dist/servomon-agent` (or build with `deno task build`)
 2. Make executable: `chmod +x path/to/executable`
-3. Create `.env` file in same folder (copy from `/agent/.env.example`)
+3. Create `.env` file in same folder (copy from `/agent/.env.example`), setting `SERVER_URL` and `NAME`. Leave `AGENT_TOKEN` empty.
 4. Run: `/path/to/binary/servomon-agent`
+
+### Adding an agent
+
+On first run (no `AGENT_TOKEN`), the agent prints a pairing code and waits:
+
+1. Open the dashboard and log in with your operator credentials.
+2. In the **Agents** section, find the pending request. Check the fingerprint matches what the agent printed.
+3. Click **Approve**. The agent receives its token automatically and starts sending metrics.
+
+For the protocol walkthrough, diagrams, recovery behavior, and current security limits, see [Agent enrollment](docs/agent-enrollment.md). The pairing code currently also authorizes token collection: keep it secret. The displayed fingerprint is a comparison label, not verified proof of private-key ownership.
+
+To remove an agent, click **Remove** next to it. Its token stops working immediately and its connection is closed. Pairing codes expire after 15 minutes; denied requests never receive a token.
+
+To fully delete a monitored system — its card on the dashboard, stored metrics, alert config, and enrollment — click **Delete** on its system card. This cannot be undone.
 
 To run in background:
 - Quick method: Press `Ctrl + Z`, then type `bg`

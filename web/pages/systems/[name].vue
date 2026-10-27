@@ -347,6 +347,17 @@ async function setupWebsocket() {
   }
   ws = new CommandExecutorWebsocketClient({
     url: "/api/ws",
+    // S1: mint a fresh single-use ticket per connection attempt. The browser
+    // re-sends the cached basic-auth credentials with this same-origin POST.
+    resolveUrl: async () => {
+      const { ticket } = await $fetch<{ ticket: string }>("/api/ws-ticket", {
+        method: "POST",
+      });
+      const wsUrl = new URL("/api/ws", window.location.origin);
+      wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+      wsUrl.searchParams.set("ticket", ticket);
+      return wsUrl.toString();
+    },
   });
 
   await ws.connect();

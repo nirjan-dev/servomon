@@ -1,5 +1,7 @@
-import { Metrics } from "../../../shared/types";
+import type { Metrics } from "../../../shared/types";
+import { getMetricsForSystem } from "../utils/metricsStore";
 
+// S1: operator-only (enforced by middleware). Reads via the shared store helper.
 export default defineEventHandler(
   async (
     event
@@ -11,37 +13,19 @@ export default defineEventHandler(
   }> => {
     const { system } = getQuery(event);
 
-    if (!system) {
+    if (!system || typeof system !== "string") {
       throw createError({
         message: "No system parameter sent",
         statusCode: 400,
       });
     }
 
-    let metricsKeys: string[];
-    let metrics: Metrics[];
-
-    try {
-      metricsKeys = await useStorage(`metrics/${system}`)
-        .getKeys()
-        .then((keys) => keys.sort((a, b) => Number(b) - Number(a)));
-
-      const MetricsWithValues = await Promise.all(
-        metricsKeys.map(async (metricKey) => {
-          return await useStorage(`metrics/${system}`).getItem<Metrics>(
-            metricKey
-          );
-        })
-      );
-      metrics = MetricsWithValues.filter((metricsItem) => metricsItem !== null);
-    } catch (error) {
-      throw error;
-    }
+    const { count, metrics } = await getMetricsForSystem(system);
 
     return {
       statusCode: 200,
       statusMessage: "OK",
-      count: metricsKeys.length,
+      count,
       metrics,
     };
   }

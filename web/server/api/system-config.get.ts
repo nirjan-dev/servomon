@@ -1,3 +1,6 @@
+import { getSystemConfig } from "../utils/metricsStore";
+
+// S1: operator-only (enforced by middleware).
 export default defineEventHandler(async (event) => {
   const { system } = getQuery(event);
 
@@ -8,7 +11,5 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  return useStorage("systemConfigs").getItem<{
-    enableAlerts: boolean;
-  }>(system);
+  return getSystemConfig(system);
 });

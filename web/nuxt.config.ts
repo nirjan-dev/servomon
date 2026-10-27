@@ -23,6 +23,14 @@ export default defineNuxtConfig({
         driver: "fs",
         base: "./data/systemConfigs",
       },
+      agents: {
+        driver: "fs",
+        base: "./data/agents",
+      },
+      audit: {
+        driver: "fs",
+        base: "./data/audit",
+      },
     },
     experimental: {
       tasks: true,
@@ -43,11 +51,14 @@ export default defineNuxtConfig({
       enableDiscordAlerts: false,
       pushPublicKey: "",
     },
-    agentToken: "",
+    wsTicketTtlSeconds: 60,
     pushPrivateKey: "",
   },
   basicAuth: {
-    allowedRoutes: ["/api/.*"],
+    enabled: true,
+    // Outer gate only: exempts paths where non-Basic credentials are valid.
+    // server/middleware/10-api-auth.ts is authoritative for every route.
+    allowedRoutes: ["^/api/metrics", "^/api/ws-ticket", "^/api/ws", "^/api/enroll/"],
   },
   app: {
     head: {

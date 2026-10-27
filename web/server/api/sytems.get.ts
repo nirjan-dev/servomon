@@ -1,6 +1,7 @@
-export default defineEventHandler(async (_event) => {
-  const allMetricKeys = await useStorage("metrics").getKeys();
-  const uniqueKeys = [...new Set(allMetricKeys.map((k) => k.split(":")[0]))];
+import { listSystems } from "../utils/metricsStore";
 
-  return uniqueKeys;
+// S1: operator-only (enforced by middleware). Name kept as-is (`sytems`) to
+// avoid breaking existing dashboard fetches; rename is out of scope for S1.
+export default defineEventHandler(async (_event) => {
+  return listSystems();
 });

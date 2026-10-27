@@ -7,6 +7,8 @@ export type WebsocketCallbacks = {
 
 export type WebsocketClientConfig = {
   url: string;
+  /** S1: resolves a fresh single-use WS URL (with ?ticket=...) per attempt. */
+  resolveUrl?: () => string | Promise<string>;
   maxReconnectAttempts?: number;
   reconnectInterval?: number;
 } & WebsocketCallbacks;
@@ -14,6 +16,7 @@ export type WebsocketClientConfig = {
 export class WebsocketClient {
   private ws: WebSocket | null = null;
   private url: string;
+  private resolveUrl?: () => string | Promise<string>;
   private isConnected: boolean = false;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 20;
@@ -23,6 +26,7 @@ export class WebsocketClient {
 
   constructor(config: WebsocketClientConfig) {
     this.url = config.url;
+    this.resolveUrl = config.resolveUrl;
     this.maxReconnectAttempts =
       config.maxReconnectAttempts ?? this.maxReconnectAttempts;
     this.reconnectInterval = config.reconnectInterval ?? this.reconnectInterval;
@@ -34,7 +38,7 @@ export class WebsocketClient {
     };
   }
 
-  public connect(): void {
+  public async connect(): Promise<void> {
     if (
       this.ws &&
       (this.ws.readyState === WebSocket.OPEN ||
@@ -44,7 +48,8 @@ export class WebsocketClient {
     }
 
     try {
-      this.ws = new WebSocket(this.url);
+      const url = this.resolveUrl ? await this.resolveUrl() : this.url;
+      this.ws = new WebSocket(url);
       this.setupEventListeners();
     } catch (error) {
       console.error("failed to create websocket connection: ", error);
@@ -110,7 +115,7 @@ export class WebsocketClient {
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectAttempts++;
-      this.connect();
+      void this.connect();
     }, backoffDelay);
   }
 

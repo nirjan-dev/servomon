@@ -1,4 +1,5 @@
 import { CommandResponderWebsocketClient } from "./lib/CommandResponderWebsocketClient.ts";
+import { enrollAgent } from "./lib/enroll.ts";
 import "@std/dotenv/load";
 import type {
   Metrics,
@@ -33,11 +34,18 @@ const SERVER_URL = Deno.env.get("SERVER_URL");
 const REQUESTS_PER_MINUTE_UNIT =
   Number(Deno.env.get("REQUESTS_PER_MINUTE_UNIT")) || 5;
 const MINUTE_UNIT = Number(Deno.env.get("MINUTE_UNIT"));
-const AGENT_TOKEN = Deno.env.get("AGENT_TOKEN");
+let AGENT_TOKEN = Deno.env.get("AGENT_TOKEN");
 const PORT = Number(Deno.env.get("PORT")) || 8000;
-const NAME = Deno.env.get("NAME") ?? 'no name configured'
+const NAME = Deno.env.get("NAME") ?? "no name configured";
+if (!SERVER_URL) {
+  throw new Error("No SERVER_URL set in env variables. Exiting agent...");
+}
 if (!AGENT_TOKEN) {
-  throw new Error("No AGENT_TOKEN set in env variables. Exiting agent...");
+  // S1: first run — enroll with the operator's approval, then continue.
+  console.log("No AGENT_TOKEN set; starting enrollment…");
+  const enrolled = await enrollAgent(SERVER_URL, NAME, Deno.cwd());
+  Deno.env.set("AGENT_TOKEN", enrolled.token);
+  AGENT_TOKEN = enrolled.token;
 }
 
 const requestIntervalMilliSeconds = getRequestIntervalMilliSeconds(
@@ -327,9 +335,26 @@ async function handler(_req: Request): Promise<Response> {
 }
 
 const ws = new CommandResponderWebsocketClient({
-  url: `${SERVER_URL}/api/ws?type=server&name=${NAME}`,
+  url: `${SERVER_URL}/api/ws`,
+  // S1: mint a fresh single-use ticket per connection attempt.
+  resolveUrl: async () => {
+    const ticketRes = await fetch(`${SERVER_URL}/api/ws-ticket`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${AGENT_TOKEN}` },
+    });
+    if (!ticketRes.ok) {
+      throw new Error(`WS ticket mint failed with HTTP ${ticketRes.status}`);
+    }
+    const { ticket } = (await ticketRes.json()) as { ticket: string };
+    const wsUrl = new URL(`${SERVER_URL}/api/ws`);
+    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+    wsUrl.searchParams.set("type", "server");
+    wsUrl.searchParams.set("name", NAME);
+    wsUrl.searchParams.set("ticket", ticket);
+    return wsUrl.toString();
+  },
 });
 
-ws.connect();
+await ws.connect();
 
 Deno.serve({ port: PORT }, handler);

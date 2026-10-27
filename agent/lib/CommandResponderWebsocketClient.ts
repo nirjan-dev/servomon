@@ -83,7 +83,7 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
 
       return {
         success: output.code === 0,
-        timestamp: new Date().getMilliseconds(),
+        timestamp: Date.now(),
         containerName: command.containerName,
         error: new TextDecoder().decode(output.stderr),
       };
@@ -91,7 +91,7 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
 
     return {
       success: false,
-      timestamp: new Date().getMilliseconds(),
+      timestamp: Date.now(),
       containerName: command.containerName,
       error: "error executing docker command",
     };
@@ -124,7 +124,7 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
         success: output.code === 0,
         affectedPid: command.pid,
         affectedProcessName: command.processName,
-        timestamp: new Date().getMilliseconds(),
+        timestamp: Date.now(),
         error: new TextDecoder().decode(output.stderr),
       };
     }
@@ -133,7 +133,7 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
       success: false,
       affectedPid: command.pid,
       affectedProcessName: command.processName,
-      timestamp: new Date().getMilliseconds(),
+      timestamp: Date.now(),
       error: "Error executing process command",
     };
   }

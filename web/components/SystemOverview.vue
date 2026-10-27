@@ -12,6 +12,7 @@
             />
           </span>
           <UButton :to="link">View Details</UButton>
+          <UButton color="red" variant="soft" size="sm" @click="$emit('deleteSystem', name)">Delete</UButton>
         </div>
       </div>
     </template>
@@ -33,6 +34,7 @@
 <script lang="ts" setup>
 const emits = defineEmits<{
   (e: "changeAlertToggle", value: boolean): void;
+  (e: "deleteSystem", system: string): void;
 }>();
 
 const props = defineProps<{
