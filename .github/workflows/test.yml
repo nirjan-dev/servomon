@@ -17,6 +17,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm build
         working-directory: web
       - run: pnpm test
