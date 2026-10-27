@@ -237,7 +237,7 @@ const containersColumns = [
 ];
 
 onMounted(async () => {
-  setupMetricsStream();
+  connectMetrics();
   await Promise.allSettled([setupWebsocket(), setupPushSubscription()]);
 });
 
@@ -330,30 +330,20 @@ async function subscribeUserToPushNotifications(
 
   return newSub;
 }
-let metricsStream: EventSource | null = null;
+const { metrics: streamedMetrics, connect: connectMetrics } = useMetricsStream(
+  computed(() => systemName as string)
+);
 
-function setupMetricsStream() {
-  metricsStream = new EventSource(
-    "/api/metrics-stream?name=" + systemName
-  );
-
-  metricsStream.onmessage = (event) => {
-    const newMetrics = JSON.parse(event.data) as Metrics[];
-
-    metrics.value = newMetrics;
-
-    if (!selectedProcesses.value.length && metrics.value.at(-1)?.processes) {
-      rawProcessStats.value = metrics.value.at(-1)!.processes;
-    }
-
-    if (
-      !selectedContainers.value.length &&
-      metrics.value.at(-1)?.containersInfo
-    ) {
-      rawDockerStats.value = metrics.value.at(-1)!.containersInfo;
-    }
-  };
-}
+// Tables follow the newest sample until the user picks rows explicitly.
+watch(streamedMetrics, (samples) => {
+  metrics.value = samples;
+  if (!selectedProcesses.value.length && samples.at(-1)?.processes) {
+    rawProcessStats.value = samples.at(-1)!.processes;
+  }
+  if (!selectedContainers.value.length && samples.at(-1)?.containersInfo) {
+    rawDockerStats.value = samples.at(-1)!.containersInfo;
+  }
+});
 
 async function setupWebsocket() {
   if (ws) {
@@ -412,7 +402,6 @@ function executeDockerCommand(action: "pause" | "unpause" | "stop") {
 }
 
 onBeforeUnmount(async () => {
-  metricsStream?.close();
   ws.disconnect();
 });
 </script>

@@ -534,7 +534,10 @@ test("operator can open metrics stream", { skip: !LOCAL && "needs credentials: l
         text += new TextDecoder().decode(value);
         const m = text.match(/data: (.*)/);
         if (m) {
-          assert.ok(Array.isArray(JSON.parse(m[1])));
+          // First push is always a full sync.
+          const msg = JSON.parse(m[1]);
+          assert.equal(msg.type, "sync");
+          assert.ok(Array.isArray(msg.metrics));
           break;
         }
         if (text.length > 100000) throw new Error("stream sent unexpected data");
@@ -542,6 +545,52 @@ test("operator can open metrics stream", { skip: !LOCAL && "needs credentials: l
     } finally {
       await reader.cancel().catch(() => {});
     }
+  } finally {
+    clearTimeout(timeout);
+    c.abort();
+  }
+});
+
+test("stream sends only new samples after sync", { skip: !LOCAL && "local only" }, async () => {
+  const creds = await enrolled(SYS_A);
+  const c = new AbortController();
+  const timeout = setTimeout(() => c.abort(), 15000);
+  try {
+    const res = await fetch(`${base}/api/metrics-stream?name=${SYS_A}`, {
+      headers: { authorization: BASIC },
+      signal: c.signal,
+    });
+    assert.equal(res.status, 200);
+    const reader = res.body.getReader();
+    const messages = [];
+    // Post a fresh sample mid-stream; the next delta must carry exactly it.
+    const ts = Date.now();
+    setTimeout(() => {
+      postMetrics(creds.token, SYS_A, ts).catch(() => {});
+    }, 500);
+    try {
+      let text = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += new TextDecoder().decode(value);
+        let m;
+        while ((m = text.match(/data: (.*)\n/))) {
+          text = text.slice(m[0].length);
+          messages.push(JSON.parse(m[1]));
+          const delta = messages.find((msg) => msg.type === "delta" && msg.metrics.some((s) => s.timestamp === ts));
+          if (delta) {
+            assert.deepEqual(delta.metrics.map((s) => s.timestamp), [ts]);
+            return;
+          }
+          if (messages.length > 10) throw new Error("fresh sample never arrived in a delta");
+        }
+        if (text.length > 500000) throw new Error("stream sent unexpected data");
+      }
+    } finally {
+      await reader.cancel().catch(() => {});
+    }
+    throw new Error("stream closed before delta arrived");
   } finally {
     clearTimeout(timeout);
     c.abort();

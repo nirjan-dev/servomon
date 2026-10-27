@@ -23,7 +23,7 @@
       </div>
     </template>
 
-    <div>
+    <div v-if="latest">
       <h2
         v-for="(info, label) in rows"
         class="flex mb-1 justify-between items-center"
@@ -34,11 +34,13 @@
         </span>
       </h2>
     </div>
+    <USkeleton v-else class="h-60 w-full" />
   </UCard>
 </template>
 
 <script lang="ts" setup>
 import { useFreshness } from "~/composables/useFreshness";
+import { useMetricsStream } from "~/composables/useMetricsStream";
 const emits = defineEmits<{
   (e: "changeAlertToggle", value: boolean): void;
   (e: "deleteSystem", system: string): void;
@@ -48,30 +50,18 @@ const props = defineProps<{
   name: string;
   link: string;
   enableAlert?: boolean;
-  metrics: {
-    timestamp: number;
-    memory: {
-      usedPercentage: number;
-    };
-    cpu: {
-      used: number;
-    };
-    containersInfo: unknown[];
-    networkInfo: {
-      downloadPerSecond: string;
-      uploadPerSecond: string;
-    };
-    systemInfo: {
-      os: string;
-      device: string;
-    };
-    battery: {
-      charge: number;
-    };
-  };
 }>();
 
-const freshness = useFreshness(computed(() => props.metrics.timestamp));
+// S3: each card owns its stream. Deleting the card unmounts it, which closes
+// the stream via the composable's onUnmounted — no parent bookkeeping.
+const { metrics, connect } = useMetricsStream(computed(() => props.name));
+const latest = computed(() => metrics.value.at(-1));
+const freshness = useFreshness(computed(() => latest.value?.timestamp));
+
+onMounted(() => {
+  connect();
+});
+
 const enableAlert = ref(props.enableAlert ?? true);
 const formatter = new Intl.DateTimeFormat("en-Us", {
   month: "short",
@@ -81,16 +71,18 @@ const formatter = new Intl.DateTimeFormat("en-Us", {
   minute: "2-digit",
 });
 const rows = computed(() => {
+  const m = latest.value;
+  if (!m) return {};
   return {
-    "Last Update": formatter.format(new Date(props.metrics.timestamp)),
-    OS: props.metrics.systemInfo.os,
-    Device: props.metrics.systemInfo.device,
-    Battery: `${props.metrics.battery.charge}%`,
-    "Memory Used": `${props.metrics.memory.usedPercentage}%`,
-    "CPU Used": `${props.metrics.cpu.used}%`,
-    "Active Containers": `${props.metrics.containersInfo.length}`,
-    "Download Speed": `${props.metrics.networkInfo.downloadPerSecond}`,
-    "Upload Speed": `${props.metrics.networkInfo.uploadPerSecond}`,
+    "Last Update": formatter.format(new Date(m.timestamp)),
+    OS: m.systemInfo.os,
+    Device: m.systemInfo.device,
+    Battery: `${m.battery.charge}%`,
+    "Memory Used": `${m.memory.usedPercentage}%`,
+    "CPU Used": `${m.cpu.used}%`,
+    "Active Containers": `${m.containersInfo.length}`,
+    "Download Speed": `${m.networkInfo.downloadPerSecond}`,
+    "Upload Speed": `${m.networkInfo.uploadPerSecond}`,
   };
 });
 </script>

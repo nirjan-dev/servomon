@@ -1,39 +1,39 @@
 import { listSystems } from "../../utils/metricsStore";
-
+import { partitionKeys } from "../../utils/retention";
 
 export default defineTask({
   meta: {
     name: "metrics:cleanup",
-    description: "Delete old metrics",
+    description: "Delete metrics outside the retention policy",
   },
   async run() {
     console.log("Cleaning up old metrics");
 
     const systems = await listSystems();
 
-    systems.forEach((system) => {
-      cleanupForSystem(system);
-    });
+    const results = await Promise.allSettled(systems.map((system) => cleanupForSystem(system)));
+    const failed = results.filter((r) => r.status === "rejected");
+    if (failed.length > 0) {
+      console.error(`Cleanup failed for ${failed.length} system(s)`);
+    }
 
-    return {};
+    return { cleaned: systems.length - failed.length, failed: failed.length };
   },
 });
 
 async function cleanupForSystem(system: string) {
-  const metricsKeys = await useStorage(`metrics/${system}`).getKeys();
+  const storage = useStorage(`metrics/${system}`);
+  const metricsKeys = await storage.getKeys();
 
-  if (metricsKeys.length <= MIN_METRICS_TO_KEEP) {
-    console.log("Not enough metrics to clean up");
+  const { remove } = partitionKeys(metricsKeys);
+
+  if (remove.length === 0) {
+    console.log(`No metrics to clean up for ${system}`);
     return;
   }
 
-  const cleanupCount = metricsKeys.length - MIN_METRICS_TO_KEEP;
+  const deletions = await Promise.allSettled(remove.map((metricKey) => storage.removeItem(metricKey)));
+  const deleted = deletions.filter((d) => d.status === "fulfilled").length;
 
-  const metricsKeysToDelete = metricsKeys.splice(0, cleanupCount);
-
-  for (const metricKey of metricsKeysToDelete) {
-    await useStorage(`metrics/${system}`).removeItem(metricKey);
-  }
-
-  console.log(`Deleted ${metricsKeysToDelete.length} metrics`);
+  console.log(`Deleted ${deleted}/${remove.length} metrics for ${system}`);
 }

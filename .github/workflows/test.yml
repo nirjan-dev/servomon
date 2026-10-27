@@ -17,12 +17,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-        working-directory: web
       - run: pnpm build
         working-directory: web
-      - run: pnpm test:s1
+      - run: pnpm test
         working-directory: web
   agent:
     name: Agent type-check
