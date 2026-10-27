@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
 async function storeMetrics(metrics: Metrics) {
   try {
     await useStorage(`metrics/${metrics.name}`).setItem(
-      metrics.timestamp,
+      String(metrics.timestamp),
       metrics
     );
     return true;

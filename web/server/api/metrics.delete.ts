@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    await useStorage(`metrics/${system}`).removeItem(timestamp);
+    await useStorage(`metrics/${system}`).removeItem(String(timestamp));
     return {
       statusCode: 200,
       statusMessage: "OK",

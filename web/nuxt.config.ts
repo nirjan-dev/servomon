@@ -1,8 +1,10 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { fileURLToPath } from "node:url";
+
 export default defineNuxtConfig({
   devtools: { enabled: true },
   alias: {
-    "@global-shared/*": "../../shared/*",
+    "@global-shared": fileURLToPath(new URL("../shared", import.meta.url)),
   },
   ssr: false,
   nitro: {
