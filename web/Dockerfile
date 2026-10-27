@@ -1,7 +1,8 @@
 # syntax = docker/dockerfile:1
 
-# Adjust NODE_VERSION as desired
-ARG NODE_VERSION=22.9.0
+# Adjust NODE_VERSION as desired. Must match the major in CI (.github/workflows)
+# so tests run on the same runtime that ships.
+ARG NODE_VERSION=24.22.1
 FROM node:${NODE_VERSION}-slim as base
 
 LABEL fly_launch_runtime="Node.js"
@@ -13,7 +14,7 @@ WORKDIR /app
 ENV NODE_ENV="production"
 
 # Install pnpm
-ARG PNPM_VERSION=9.10.0
+ARG PNPM_VERSION=9.11.0
 RUN npm install -g pnpm@$PNPM_VERSION
 
 
