@@ -1210,3 +1210,97 @@ test("handshake decisions are audit-logged without secrets", { skip: !LOCAL && "
   assert.ok(!serialized.includes(body.ticket), "audit log must not contain ticket values");
   assert.ok(!serialized.includes(OPERATOR.pass), "audit log must not contain passwords");
 });
+// ---------- S2: disconnection isolation ----------
+
+test("disconnecting one dashboard does not stop the other's results", { skip: !LOCAL && "local only" }, async () => {
+  const creds = await enrolled(SYS_A);
+  const fixture = metricsFixture(SYS_A);
+  fixture.containersInfo = [{ memoryUsedPercent: "10", memoryUsed: "100MB", cpuUsed: "5", name: "poc-container", id: "abc", state: "running" }];
+  const posted = await fetch(`${base}/api/metrics`, {
+    method: "POST",
+    headers: { authorization: bearer(creds.token), "content-type": "application/json" },
+    body: JSON.stringify(fixture),
+  });
+  assert.equal(posted.status, 200);
+  const agentTicket = (await postTicket({ token: creds.token })).body?.ticket;
+  const opTicket1 = (await postTicket({ basic: BASIC })).body?.ticket;
+  const opTicket2 = (await postTicket({ basic: BASIC })).body?.ticket;
+  assert.ok(agentTicket && opTicket1 && opTicket2, "tickets required");
+  const agent = await tryConnect(`${wsBase()}/api/ws?type=server&name=${SYS_A}&ticket=${agentTicket}`);
+  assert.equal(agent.opened, true);
+  const agentMsgs = collect(agent.ws);
+  const op1 = await tryConnect(`${wsBase()}/api/ws?ticket=${opTicket1}`);
+  assert.equal(op1.opened, true);
+  const op2 = await tryConnect(`${wsBase()}/api/ws?ticket=${opTicket2}`);
+  assert.equal(op2.opened, true);
+  const op2Msgs = collect(op2.ws);
+  try {
+    // First command reaches the agent while both dashboards are connected.
+    op1.ws.send(JSON.stringify({ system: SYS_A, type: "docker", action: "stop", containerName: "poc-container" }));
+    await waitFor(() => agentMsgs.length > 0, 3000, "agent never received the first command");
+    const commandId1 = JSON.parse(agentMsgs[0]).commandId;
+    assert.ok(commandId1, "forwarded command must carry commandId");
+    // Disconnect the first dashboard. The pre-S2 bug wiped the whole client
+    // list here, silently cutting off every other dashboard.
+    closeWs(op1.ws);
+    await sleep(500);
+    // Second command from the surviving dashboard: agent gets it, result
+    // comes back to the survivor.
+    op2.ws.send(JSON.stringify({ system: SYS_A, type: "docker", action: "stop", containerName: "poc-container" }));
+    await waitFor(() => agentMsgs.length > 1, 3000, "agent never received the second command");
+    const commandId2 = JSON.parse(agentMsgs[1]).commandId;
+    assert.ok(commandId2 && commandId2 !== commandId1, "each forward must carry a fresh commandId");
+    agent.ws.send(JSON.stringify({ type: "docker", data: { success: true, timestamp: Date.now(), containerName: "poc-container", commandId: commandId2 } }));
+    await waitFor(() => op2Msgs.length > 0, 3000, "surviving dashboard never received the result");
+    assert.equal(JSON.parse(op2Msgs[0]).data.commandId, commandId2);
+  } finally {
+    closeWs(agent.ws);
+    closeWs(op1.ws);
+    closeWs(op2.ws);
+  }
+});
+
+test("agent reconnect cannot be dropped by the stale connection", { skip: !LOCAL && "local only" }, async () => {
+  const creds = await enrolled(SYS_B);
+  const fixture = metricsFixture(SYS_B);
+  fixture.containersInfo = [{ memoryUsedPercent: "10", memoryUsed: "100MB", cpuUsed: "5", name: "poc-container", id: "abc", state: "running" }];
+  const posted = await fetch(`${base}/api/metrics`, {
+    method: "POST",
+    headers: { authorization: bearer(creds.token), "content-type": "application/json" },
+    body: JSON.stringify(fixture),
+  });
+  assert.equal(posted.status, 200);
+  const tixOld = (await postTicket({ token: creds.token })).body?.ticket;
+  const tixNew = (await postTicket({ token: creds.token })).body?.ticket;
+  const opTicket = (await postTicket({ basic: BASIC })).body?.ticket;
+  assert.ok(tixOld && tixNew && opTicket, "tickets required");
+  const oldAgent = await tryConnect(`${wsBase()}/api/ws?type=server&name=${SYS_B}&ticket=${tixOld}`);
+  assert.equal(oldAgent.opened, true, "old agent socket must open");
+  // Reconnect: the new socket replaces the old one for the same system.
+  const newAgent = await tryConnect(`${wsBase()}/api/ws?type=server&name=${SYS_B}&ticket=${tixNew}`);
+  assert.equal(newAgent.opened, true, "new agent socket must open");
+  const newMsgs = collect(newAgent.ws);
+  const oldClosed = new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 3000);
+    oldAgent.ws.addEventListener("close", (ev) => {
+      clearTimeout(timer);
+      resolve(ev.code);
+    });
+  });
+  // Now close the stale socket. The close guard must not unregister the new one.
+  closeWs(oldAgent.ws);
+  const oldCode = await oldClosed;
+  assert.ok(oldCode === 4409 || oldCode === 1005, `stale socket must close, got ${oldCode}`);
+  await sleep(500);
+  const op = await tryConnect(`${wsBase()}/api/ws?ticket=${opTicket}`);
+  assert.equal(op.opened, true);
+  try {
+    op.ws.send(JSON.stringify({ system: SYS_B, type: "docker", action: "stop", containerName: "poc-container" }));
+    await waitFor(() => newMsgs.length > 0, 3000, "reconnected agent never received the command");
+    assert.equal(JSON.parse(newMsgs[0]).system, SYS_B);
+  } finally {
+    closeWs(newAgent.ws);
+    closeWs(oldAgent.ws);
+    closeWs(op.ws);
+  }
+});

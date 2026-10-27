@@ -2,7 +2,13 @@
   <UCard>
     <template #header
       ><div class="flex flex-wrap justify-between items-center">
-        <span class="capitalize font-bold text-primary"> {{ name }}</span>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="capitalize font-bold text-primary"> {{ name }}</span>
+          <span class="flex items-center gap-1.5 text-xs text-gray-500">
+            <span class="inline-block w-2 h-2 rounded-full" :class="freshness.dotClass.value" />
+            {{ freshness.label.value }}
+          </span>
+        </div>
         <div class="flex items-center gap-4 flex-wrap">
           <span class="flex items-center gap-1">
             Alerts
@@ -32,6 +38,7 @@
 </template>
 
 <script lang="ts" setup>
+import { useFreshness } from "~/composables/useFreshness";
 const emits = defineEmits<{
   (e: "changeAlertToggle", value: boolean): void;
   (e: "deleteSystem", system: string): void;
@@ -64,6 +71,7 @@ const props = defineProps<{
   };
 }>();
 
+const freshness = useFreshness(computed(() => props.metrics.timestamp));
 const enableAlert = ref(props.enableAlert ?? true);
 const formatter = new Intl.DateTimeFormat("en-Us", {
   month: "short",

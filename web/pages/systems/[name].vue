@@ -1,5 +1,11 @@
 <template>
-  <UBreadcrumb :links="breadcrumbLinks" class="capitalize" />
+  <div class="flex items-center gap-3 flex-wrap">
+    <UBreadcrumb :links="breadcrumbLinks" class="capitalize" />
+    <span v-if="!isLoadingMetrics" class="flex items-center gap-1.5 text-sm text-gray-500">
+      <span class="inline-block w-2 h-2 rounded-full" :class="freshness.dotClass.value" />
+      {{ freshness.label.value }}
+    </span>
+  </div>
 
   <USkeleton v-if="isLoadingMetrics" class="mt-6 w-full h-svh" />
 
@@ -60,11 +66,18 @@ import {
   type ProcessInfo,
 } from "@global-shared/types";
 import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebsocketClient";
+import { useFreshness } from "~/composables/useFreshness";
 const metrics = ref<Metrics[]>([]);
 const selectedProcesses = ref<typeof processesStats.value>([]);
 const selectedContainers = ref<typeof dockerStats.value>([]);
 const systemName = useRoute().params.name ?? "";
 const isLoadingMetrics = computed(() => metrics.value.length === 0);
+// Newest sample across the stream; freshness follows it as data arrives.
+const newestTimestamp = computed(() => {
+  if (!metrics.value.length) return undefined;
+  return Math.max(...metrics.value.map((m) => m.timestamp));
+});
+const freshness = useFreshness(newestTimestamp);
 const breadcrumbLinks = [
   {
     label: "Home",
@@ -317,9 +330,10 @@ async function subscribeUserToPushNotifications(
 
   return newSub;
 }
+let metricsStream: EventSource | null = null;
 
 function setupMetricsStream() {
-  const metricsStream = new EventSource(
+  metricsStream = new EventSource(
     "/api/metrics-stream?name=" + systemName
   );
 
@@ -398,6 +412,7 @@ function executeDockerCommand(action: "pause" | "unpause" | "stop") {
 }
 
 onBeforeUnmount(async () => {
+  metricsStream?.close();
   ws.disconnect();
 });
 </script>
