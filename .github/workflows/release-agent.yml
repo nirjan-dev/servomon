@@ -1,0 +1,31 @@
+name: Release agent
+on:
+  push:
+    tags:
+      - "agent-v*"
+jobs:
+  build:
+    name: Build linux-x86_64 agent
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check main.ts lib/enroll.ts lib/CommandResponderWebsocketClient.ts
+        working-directory: agent
+      # Linux only: command execution shells out to `kill` and the docker CLI,
+      # which have no Windows equivalent. Metrics collection would work anywhere,
+      # but shipping binaries with silently broken commands would be dishonest.
+      - run: deno compile --target x86_64-unknown-linux-gnu --output ./dist/servomon-agent-linux-x86_64 --allow-all --unstable-unsafe-proto main.ts
+        working-directory: agent
+      - run: sha256sum dist/servomon-agent-linux-x86_64 | tee dist/SHA256SUMS
+        working-directory: agent
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            agent/dist/servomon-agent-linux-x86_64
+            agent/dist/SHA256SUMS
+          generate_release_notes: true

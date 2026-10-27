@@ -1,0 +1,8 @@
+node_modules/
+.vitepress/dist/
+.vitepress/cache/
+websocket-auth.md
+agent-enrollment.md
+s2-disconnection-isolation.md
+s3-retention-streaming.md
+public/assets/
