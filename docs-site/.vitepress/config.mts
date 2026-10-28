@@ -5,7 +5,7 @@ export default withMermaid(
   defineConfig({
     title: "Servomon",
     description: "Simple home server monitoring — secure by default",
-    base: "/servomon/",
+    base: "/",
     themeConfig: {
       nav: [
         { text: "Guide", link: "/guide" },

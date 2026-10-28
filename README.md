@@ -85,6 +85,17 @@ To run in background:
     systemctl status servomon_agent
     ```
 
+## Documentation
+
+The docs are published at [servomon.nirjan.dev](https://servomon.nirjan.dev/).
+The **Docs** GitHub Actions workflow builds and deploys changes under `docs/` or
+`docs-site/` when pushed to `main`; it can also be run manually.
+
+The custom domain serves the site at `/`, so `docs-site/.vitepress/config.mts`
+must use `base: "/"`. A repository-site base such as `/servomon/` prefixes asset
+and navigation URLs with the wrong path and causes 404s on the custom domain.
+Changing the domain in GitHub Pages settings does not rebuild those URLs.
+
 ## Tech Stack
 
 - [Deno](https://deno.com): JavaScript runtime used to compile the agent into an executable binary.
