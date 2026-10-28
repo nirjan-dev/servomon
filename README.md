@@ -24,7 +24,7 @@ Servomon helps you monitor Linux servers through an easy-to-use web app. It cons
 - **Alerting**:
   - Web push notifications
   - Discord Alerts
-  - Supports these alerts by default: low battery, low storage, and server downtime
+  - Supports these alerts by default: low battery (skipped on machines without one), low storage, and server downtime
 
 ![Overview: every system with live status, CPU trend, memory, disk and network](./web/public/screenshots/desktop-dashboard.png)
 ![System detail in dark mode: CPU, memory and network charts, storage, containers and processes](./web/public/screenshots/desktop-detail.png)

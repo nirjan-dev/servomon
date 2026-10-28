@@ -13,7 +13,7 @@
     "generate:pwa-assets": "pwa-assets-generator --preset minimal-2023 public/logo.svg",
     "test:s1": "node --test test/s1-auth.test.mjs",
     "test:retention": "node --experimental-strip-types --test test/retention.test.mjs",
-    "test": "node --experimental-strip-types --test test/retention.test.mjs && node --test test/s1-auth.test.mjs"
+    "test": "node --experimental-strip-types --test test/retention.test.mjs test/battery.test.mjs && node --test test/s1-auth.test.mjs"
   },
   "devDependencies": {
     "@flydotio/dockerfile": "^0.5.9",

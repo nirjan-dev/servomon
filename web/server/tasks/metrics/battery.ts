@@ -1,4 +1,5 @@
 import { getMetricsForSystem, listSystems } from "../../utils/metricsStore";
+import { isLowBattery } from "../../utils/battery";
 
 const batteryAlertThreshold = 50;
 
@@ -28,7 +29,7 @@ async function batteryCheckForSystem(system: string) {
 
   const latestMetric = metrics[0];
 
-  if (latestMetric.battery.charge > batteryAlertThreshold) {
+  if (!isLowBattery(latestMetric.battery.charge, batteryAlertThreshold)) {
     return;
   }
 
