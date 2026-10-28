@@ -23,6 +23,7 @@ export class PushSubscribersService {
   public async addSubscription(newSub: PushSubscription) {
     try {
       const subs = await this.getAllSubscriptions();
+      if (subs.some((sub) => sub.endpoint === newSub.endpoint)) return true;
       subs?.push(newSub);
       await this.#storageClient.setItem(this.#keyName, subs);
       return true;
@@ -30,6 +31,11 @@ export class PushSubscribersService {
       console.log("error adding new sub", error);
       return false;
     }
+  }
+
+  public async removeSubscription(endpoint: string) {
+    const subs = await this.getAllSubscriptions();
+    await this.#storageClient.setItem(this.#keyName, subs.filter((sub) => sub.endpoint !== endpoint));
   }
 
   public async getAllSubscriptions() {

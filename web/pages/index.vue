@@ -6,7 +6,7 @@ import { FLEET_GRID } from "~/utils/layout";
 const { entries, pending, loaded, setAlerts, deleteSystem } = useFleet();
 const now = useNow();
 
-const SETUP_GUIDE = "https://nirjan-dev.github.io/servomon/guide.html";
+const SETUP_GUIDE = "https://servomon.nirjan.dev/agent-install";
 
 // Fleet summary from each agent's last report, like the sidebar.
 const summary = computed(() => {
@@ -91,8 +91,9 @@ const pendingTitle = computed(() =>
         v-else-if="loaded"
         icon="i-lucide-server"
         title="No systems yet"
-        description="Run the agent on a machine you want to monitor. Its pairing request shows up under Agents."
+        description="Install the agent on a machine you want to monitor: Agents → Add agent gives you a one-line command."
         :actions="[
+          { label: 'Add agent', icon: 'i-lucide-plus', to: '/agents' },
           { label: 'Setup guide', to: SETUP_GUIDE, target: '_blank', trailingIcon: 'i-lucide-arrow-up-right', color: 'neutral', variant: 'outline' },
         ]"
       />

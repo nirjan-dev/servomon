@@ -1,52 +1,30 @@
-# syntax = docker/dockerfile:1
-
-# Adjust NODE_VERSION as desired. Must match the major in CI (.github/workflows)
-# so tests run on the same runtime that ships.
+# syntax=docker/dockerfile:1
 ARG NODE_VERSION=24.22.1
-FROM node:${NODE_VERSION}-slim as base
-
-LABEL fly_launch_runtime="Node.js"
-
-# Node.js app lives here
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-slim AS build
 WORKDIR /app
-
-# Set production environment
-ENV NODE_ENV="production"
-
-# Install pnpm
 ARG PNPM_VERSION=9.11.0
-RUN npm install -g pnpm@$PNPM_VERSION
-
-
-# Throw-away build stage to reduce size of final image
-FROM base as build
-
-# Install packages needed to build node modules
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
-
-# Install node modules
+RUN npm install -g pnpm@${PNPM_VERSION}
 COPY .npmrc package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod=false
-
-# Copy application code. The build context is web/ only (flyctl deploy ./web),
-# so repo-root shared/ is absent here: web code may only `import type` from it.
+RUN pnpm install --frozen-lockfile
+# The maintainer's Fly deployment uses web/ as its build context too.
 COPY . .
-
-# Build application
 RUN pnpm run build
+# Cross-platform copying is safe only while Nitro has no native modules.
+RUN test -z "$(find .output -name '*.node' -print -quit)"
 
-# Remove development dependencies
-# TODO: figure out why this isn't working 
-# RUN pnpm prune --prod
-
-
-# Final stage for app image
-FROM base
-
-# Copy built application
-COPY --from=build /app /app
-
-# Start the server by default, this can be overwritten at runtime
+FROM node:${NODE_VERSION}-slim AS runtime
+LABEL org.opencontainers.image.title="Servomon" \
+      org.opencontainers.image.description="Self-hosted Linux monitoring dashboard" \
+      org.opencontainers.image.source="https://github.com/nirjan-dev/servomon" \
+      org.opencontainers.image.licenses="MIT" \
+      fly_launch_runtime="Node.js"
+WORKDIR /app
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
+COPY --from=build /app/.output ./.output
+COPY --from=build /app/scripts ./scripts
+RUN printf '#!/bin/sh\nexec node /app/scripts/generate-vapid-keys.mjs "$@"\n' > /usr/local/bin/generate-vapid-keys \
+    && chmod +x /usr/local/bin/generate-vapid-keys
+# Run as root: Fly volumes and Render disks are root-owned on first mount.
+VOLUME /app/data
 EXPOSE 3000
-CMD [ "node", ".output/server/index.mjs" ]
+CMD ["node", ".output/server/index.mjs"]

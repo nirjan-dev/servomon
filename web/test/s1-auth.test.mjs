@@ -386,6 +386,22 @@ test("anon cannot check subscription", async () => {
   assert.equal(res.status, 401);
 });
 
+test("anon cannot read the push public key", async () => {
+  const res = await fetch(`${base}/api/push/public-key`);
+  await res.text();
+  assert.equal(res.status, 401);
+});
+
+test("anon cannot remove push subscriptions", { skip: !LOCAL && "state-changing: local only" }, async () => {
+  const res = await fetch(`${base}/api/subscriptions`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ endpoint: "https://example.com/poc" }),
+  });
+  await res.text();
+  assert.equal(res.status, 401);
+});
+
 test("wrong operator password is rejected on the API", async () => {
   const res = await fetch(`${base}/api/sytems`, { headers: { authorization: BAD_BASIC } });
   await res.text().catch(() => {});
@@ -514,6 +530,16 @@ test("operator can manage push subscriptions", { skip: !LOCAL && "needs credenti
   });
   assert.equal(check.status, 200);
   assert.equal((await check.json()).isSubscribed, true);
+  const remove = await fetch(`${base}/api/subscriptions`, {
+    method: "DELETE",
+    headers: { authorization: BASIC, "content-type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint }),
+  });
+  assert.equal(remove.status, 204);
+  const after = await fetch(`${base}/api/check-subscription?endpoint=${encodeURIComponent(sub.endpoint)}`, {
+    headers: { authorization: BASIC },
+  });
+  assert.equal((await after.json()).isSubscribed, false);
 });
 
 test("operator can open metrics stream", { skip: !LOCAL && "needs credentials: local only" }, async () => {

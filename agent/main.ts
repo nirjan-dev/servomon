@@ -1,5 +1,6 @@
 import { CommandResponderWebsocketClient } from "./lib/CommandResponderWebsocketClient.ts";
 import { enrollAgent } from "./lib/enroll.ts";
+import { resolveDockerSocket } from "./lib/dockerSocket.ts";
 import "@std/dotenv/load";
 import type {
   Metrics,
@@ -12,31 +13,31 @@ import type {
   NetworkInfo,
   SystemInfo,
 } from "../shared/types.ts";
-import {
-  battery,
-  currentLoad,
-  dockerContainers,
-  dockerContainerStats,
-  fsSize,
-  get,
-  mem,
-  networkInterfaceDefault,
-  networkStats,
-  processes,
-  processLoad,
-} from "systeminformation";
 import denoJSON from "./deno.json" with { type: "json" };
 
 const version = denoJSON.version;
 
-const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") === "true" ? true : false;
+if (Deno.args.length === 1 && Deno.args[0] === "--version") {
+  console.log(version);
+  Deno.exit(0);
+}
+const enrollOnly = Deno.args.length === 1 && Deno.args[0] === "enroll";
+if (Deno.args.length && !enrollOnly) {
+  console.error("Usage: servomon-agent [enroll | --version]");
+  Deno.exit(1);
+}
+const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") !== "false";
 const SERVER_URL = Deno.env.get("SERVER_URL");
 const REQUESTS_PER_MINUTE_UNIT =
-  Number(Deno.env.get("REQUESTS_PER_MINUTE_UNIT")) || 5;
-const MINUTE_UNIT = Number(Deno.env.get("MINUTE_UNIT"));
+  Number(Deno.env.get("REQUESTS_PER_MINUTE_UNIT")) || 20;
+const MINUTE_UNIT = Number(Deno.env.get("MINUTE_UNIT")) || 2;
 let AGENT_TOKEN = Deno.env.get("AGENT_TOKEN");
-const PORT = Number(Deno.env.get("PORT")) || 8000;
-const NAME = Deno.env.get("NAME") ?? "no name configured";
+const PORT = Number(Deno.env.get("PORT")) || 8282;
+const NAME = Deno.env.get("NAME") || Deno.hostname().replace(/[^A-Za-z0-9._-]/g, "-");
+if (enrollOnly && AGENT_TOKEN) {
+  console.log("Already enrolled: AGENT_TOKEN is set.");
+  Deno.exit(0);
+}
 if (!SERVER_URL) {
   throw new Error("No SERVER_URL set in env variables. Exiting agent...");
 }
@@ -47,6 +48,17 @@ if (!AGENT_TOKEN) {
   Deno.env.set("AGENT_TOKEN", enrolled.token);
   AGENT_TOKEN = enrolled.token;
 }
+if (enrollOnly) Deno.exit(0);
+
+const dockerSocket = await resolveDockerSocket();
+Deno.env.set("DOCKER_SOCKET", dockerSocket);
+console.log(`Docker socket: ${dockerSocket}`);
+// Dynamic import guarantees systeminformation reads the resolved socket at
+// evaluation time; static import ordering would run it before this assignment.
+const {
+  battery, currentLoad, dockerContainers, dockerContainerStats, fsSize, get,
+  mem, networkInterfaceDefault, networkStats, processes, processLoad,
+} = await import("systeminformation");
 
 const requestIntervalMilliSeconds = getRequestIntervalMilliSeconds(
   REQUESTS_PER_MINUTE_UNIT,
@@ -357,4 +369,4 @@ const ws = new CommandResponderWebsocketClient({
 
 await ws.connect();
 
-Deno.serve({ port: PORT }, handler);
+Deno.serve({ hostname: "127.0.0.1", port: PORT }, handler);

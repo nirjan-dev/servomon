@@ -1,0 +1,12 @@
+services:
+  servomon:
+    image: ghcr.io/nirjan-dev/servomon:latest
+    env_file: .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - servomon-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  servomon-data:

@@ -1,111 +1,63 @@
-# Servomon - Simple Home Server Monitoring
+# Servomon — Simple Home Server Monitoring
 
-Servomon helps you monitor Linux servers through an easy-to-use web app. It consists of two parts:
-- A web app for viewing server metrics
-- An agent that runs on your servers to collect and send data
+A self-hosted dashboard for your Linux machines: run one web server, approve an agent on each machine, and see your fleet live.
 
-## Key Features
+[Documentation](https://servomon.nirjan.dev/) · [Demo](https://servomon.nirjan.dev/demo) · [Releases](https://github.com/nirjan-dev/servomon/releases)
 
-- **Secure by default**: the dashboard and API require an operator login; each agent gets its own token via dashboard approval (see "Adding an agent"); WebSocket connections use single-use handshake tickets ([how they work and why](docs/websocket-auth.md)) and every forwarded command is audit-logged
-- **Comprehensive Monitoring**:
-  - Memory usage
-  - Network performance (speed, errors, drops)
-  - Disk usage
-  - CPU usage
-  - Battery percentage
-  - Docker container stats
-  - Top process tracking
-- **Remote Management**:
-  - Stop, pause and unpause Docker containers
-  - Kill active processes
-- **Flexible**:
-  - Monitor multiple servers
-  - Install as PWA on your phone
-- **Alerting**:
-  - Web push notifications
-  - Discord Alerts
-  - Supports these alerts by default: low battery (skipped on machines without one), low storage, and server downtime
+## Features
+
+- **Live metrics:** CPU, memory, disk, network, battery, processes and Docker containers across multiple servers.
+- **Remote actions:** stop/pause/unpause containers and kill processes, with command audit logging.
+- **Honest freshness:** live, stale and offline states instead of frozen metrics pretending to be current.
+- **Alerts:** web push and Discord for downtime/recovery, low battery and low storage; per-system alert toggles.
+- **Installable PWA:** use the dashboard from your desktop or phone.
+- **Secure by default:** operator login, individual agent enrollment/revocation and single-use WebSocket tickets.
+- **Predictable retention:** metrics use a 24-hour window intersected with a newest-500 cap, keeping at least the newest five.
 
 ![Overview: every system with live status, CPU trend, memory, disk and network](./web/public/screenshots/desktop-dashboard.png)
 ![System detail in dark mode: CPU, memory and network charts, storage, containers and processes](./web/public/screenshots/desktop-detail.png)
 ![Overview on mobile](./web/public/screenshots/mobile-dashboard.png)
 
-## Installation
+## Quick start
 
-### Web App
+### 1. Start the server
 
-#### Option 1: Local Docker Install
-1. Clone the repository
-2. Navigate to the web directory
-3. Create an `.env` file: `cp .env.example .env`, then set `NUXT_BASIC_AUTH_USERS` to at least one `user:password` pair (required — without it every route denies all requests)
-4. Start container: `docker compose up -d`
-5. Open `http://localhost:3000` and log in
+Docker Compose, without cloning or building:
 
-#### Option 2: Fly.io Deploy
-1. Edit `fly.toml` as needed
-2. Create data volume: `fly volumes create data`
-3. Set secrets: `fly secrets set NUXT_BASIC_AUTH_USERS="you:strong-password"`
-4. Deploy: `fly deploy`
+```sh
+mkdir -p servomon && cd servomon
+curl -fsSLo compose.yaml https://raw.githubusercontent.com/nirjan-dev/servomon/main/deploy/compose.yaml
+curl -fsSLo .env https://raw.githubusercontent.com/nirjan-dev/servomon/main/deploy/.env.example
+# Edit .env: set NUXT_BASIC_AUTH_USERS=admin:your-strong-password
+docker compose up -d
+```
 
-> Fly.io terminates TLS for `*.fly.dev` automatically. If you self-host elsewhere, serve the app behind TLS (Caddy, Tailscale Serve, Cloudflare Tunnel, …) — agent tokens travel in HTTP headers and must never cross the network in cleartext.
+Open **http://localhost:3000** and log in. Before connecting across a network, [set up HTTPS](https://servomon.nirjan.dev/server-docker#https-with-caddy): credentials and agent tokens must not travel in cleartext. Prefer hosted? See [Fly.io and Render](https://servomon.nirjan.dev/server-hosted).
 
-### Agent Setup
+### 2. Install and approve an agent
 
-The agent runs on Linux x86_64 (command execution shells out to `kill` and the `docker` CLI, which have no Windows equivalent).
+On the Linux x86_64 or ARM64 machine you want to monitor:
 
-1. Download `servomon-agent-linux-x86_64` from the latest [GitHub Release](https://github.com/nirjan-dev/servomon/releases) (verify with `SHA256SUMS`), or build from source: `cd agent && deno task build`
-2. Make executable: `chmod +x path/to/executable`
-3. Create `.env` file in same folder (copy from `/agent/.env.example`), setting `SERVER_URL` and `NAME`. Leave `AGENT_TOKEN` empty.
-4. Run from that folder: `/path/to/binary/servomon-agent` (it reads `.env` and stores its identity in the working directory)
+```sh
+curl -fsSL https://github.com/nirjan-dev/servomon/releases/latest/download/install.sh | sh -s -- --server https://monitor.example.com
+```
 
-### Adding an agent
+Replace the URL with your server's HTTPS origin. On **Agents**, match the printed pairing code and fingerprint label, then **Approve**. The installer saves its token and starts `servomon-agent.service` as the invoking user. **Agents → Add agent** can generate a prefilled installer command.
 
-On first run (no `AGENT_TOKEN`), the agent prints a pairing code and waits:
+See the docs for [manual agent installation, upgrades and uninstall](https://servomon.nirjan.dev/agent-install), [configuration](https://servomon.nirjan.dev/configuration), [notifications](https://servomon.nirjan.dev/notifications), [troubleshooting](https://servomon.nirjan.dev/troubleshooting), and [architecture](https://servomon.nirjan.dev/architecture). Security trade-offs are documented in [WebSocket authentication](https://servomon.nirjan.dev/websocket-auth) and [agent enrollment](https://servomon.nirjan.dev/agent-enrollment).
 
-1. Open the dashboard and log in with your operator credentials.
-2. Open **Agents** (it shows a badge while requests are pending) and find the request. Check the fingerprint matches what the agent printed.
-3. Click **Approve**. The agent receives its token automatically and starts sending metrics.
+## Tech stack
 
-For the protocol walkthrough, diagrams, recovery behavior, and current security limits, see [Agent enrollment](docs/agent-enrollment.md). Token collection requires a device-only secret the agent generates at request time — the pairing code alone only identifies the request. The displayed fingerprint is a comparison label, not verified proof of private-key ownership.
+- **Web:** Nuxt 4 / Nitro, Vue, Nuxt UI, Tailwind CSS and Unovis charts; filesystem-backed storage, SSE and WebSockets.
+- **Agent:** Deno-compiled Linux binary, TypeScript, systeminformation and Zod.
+- **Docs:** VitePress with Mermaid, published at [servomon.nirjan.dev](https://servomon.nirjan.dev/).
 
-To remove an agent, click **Remove** next to it on the **Agents** page and confirm. Its token stops working immediately and its connection is closed. Pairing codes expire after 15 minutes; denied requests never receive a token.
+Run the app as **one long-lived server with a persistent disk**. Docker, Fly.io and Render are supported paths; Vercel and Cloudflare Workers are not.
 
-To fully delete a monitored system — its row on the overview, stored metrics, alert config, and enrollment — open the row's **⋯** menu, choose **Delete system…** and confirm. This cannot be undone.
+## Releasing
 
-To run in background:
-- Quick method: Press `Ctrl + Z`, then type `bg`
-- Recommended: Set up systemd service
-  - Example file at `/agent/servomon_agent.service`
-  - Replace `User=username`, `WorkingDirectory=` (must be the folder holding the binary and `.env`), and the `ExecStart=` path, then copy to `/etc/systemd/system/`
-  - Run:
-    ```
-    sudo systemctl daemon-reload
-    sudo systemctl enable servomon_agent
-    sudo systemctl start servomon_agent
-    systemctl status servomon_agent
-    ```
-
-## Documentation
-
-The docs are published at [servomon.nirjan.dev](https://servomon.nirjan.dev/).
-The **Docs** GitHub Actions workflow builds and deploys changes under `docs/` or
-`docs-site/` when pushed to `main`; it can also be run manually.
-
-The custom domain serves the site at `/`, so `docs-site/.vitepress/config.mts`
-must use `base: "/"`. A repository-site base such as `/servomon/` prefixes asset
-and navigation URLs with the wrong path and causes 404s on the custom domain.
-Changing the domain in GitHub Pages settings does not rebuild those URLs.
-
-## Tech Stack
-
-- [Deno](https://deno.com): JavaScript runtime used to compile the agent into an executable binary.
-- [Nuxt](https://nuxt.com): Fullstack Typescript framework that powers the web app.
-- [Nuxt UI & Tailwind](https://ui.nuxt.com): For UI components and custom styling
-- [Zod](https://zod.dev): For runtime validation
-- [@unovis/vue](https://unovis.dev/): Library for chart components
-- [Typescript](https://www.typescriptlang.org/)
-- Websockets: For running commands sent from the web app on the servers.
-- [systeminformation](https://systeminformation.io/): Library to collect system information from the servers
+Maintainers: bump **both** `agent/deno.json` and `web/package.json` to the same version, then push a matching **`vX.Y.Z`** tag (first release: `v0.1.0`). `.github/workflows/release.yml` rejects mismatched versions, compiles Linux x86_64 and ARM64 agents, publishes `install.sh` and `SHA256SUMS` alongside them, and builds a multi-architecture GHCR image (`ghcr.io/nirjan-dev/servomon`, tags `X.Y.Z`, `X.Y`, `latest`). One tag versions the whole project.
 
 ## License
-[MIT](https://github.com/nirjan-dev/servomon/tree/main/LICENSE)
+
+[MIT](./LICENSE)

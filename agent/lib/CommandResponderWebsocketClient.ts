@@ -9,6 +9,8 @@ import { WebsocketClient } from "../../shared/lib/WebsocketClient.ts";
 import { commandSchema } from "../schemas/schemas.zod.ts";
 import { CommandResult } from "../../shared/types.ts";
 
+import { dockerCommandEnvironment } from "./dockerSocket.ts";
+
 export class CommandResponderWebsocketClient extends WebsocketClient {
   constructor(config: WebsocketClientConfig) {
     super(config);
@@ -66,16 +68,19 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
       case "unpause":
         process = new Deno.Command("docker", {
           args: ["container", "unpause", command.containerName],
+          env: dockerCommandEnvironment(),
         });
         break;
       case "pause":
         process = new Deno.Command("docker", {
           args: ["container", "pause", command.containerName],
+          env: dockerCommandEnvironment(),
         });
         break;
       case "stop":
         process = new Deno.Command("docker", {
           args: ["container", "stop", command.containerName],
+          env: dockerCommandEnvironment(),
         });
         break;
       default:

@@ -25,7 +25,7 @@ jobs:
       - run: pnpm test
         working-directory: web
   agent:
-    name: Agent type-check
+    name: Agent type-check + socket regression
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,4 +33,6 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check main.ts lib/enroll.ts lib/CommandResponderWebsocketClient.ts
+        working-directory: agent
+      - run: deno task test
         working-directory: agent

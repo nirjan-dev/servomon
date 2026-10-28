@@ -67,12 +67,15 @@ const systemItems = computed<NavigationMenuItem[]>(() => [
       </template>
 
       <template #footer="{ collapsed }">
+        <div class="flex w-full flex-col gap-2">
+        <NotificationSettings :collapsed="collapsed" />
         <div class="flex w-full items-center justify-between gap-2">
           <p v-if="!collapsed" class="text-xs text-muted">
             Made with ❤️ by
             <a class="underline underline-offset-2 hover:text-highlighted" target="_blank" href="https://nirjan.dev">Nirjan</a>
           </p>
           <UColorModeButton />
+        </div>
         </div>
       </template>
     </UDashboardSidebar>

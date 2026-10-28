@@ -1,0 +1,16 @@
+[Unit]
+Description=Servomon monitoring agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=username
+Environment=HOME=/home/username
+WorkingDirectory=/opt/servomon-agent
+ExecStart=/opt/servomon-agent/servomon-agent
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

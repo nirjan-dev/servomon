@@ -73,6 +73,7 @@ export default defineNuxtConfig({
     },
     wsTicketTtlSeconds: 60,
     pushPrivateKey: "",
+    pushSubject: "https://servomon.nirjan.dev",
   },
   basicAuth: {
     enabled: true,

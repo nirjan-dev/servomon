@@ -1,0 +1,28 @@
+# Use this file by itself, not as an override of compose.yaml.
+# For LAN-only hosts, append --internal-certs to Caddy's command and trust its
+# local CA on each client. localhost uses the local CA automatically.
+services:
+  servomon:
+    image: ghcr.io/nirjan-dev/servomon:latest
+    env_file: .env
+    volumes:
+      - servomon-data:/app/data
+    restart: unless-stopped
+  caddy:
+    image: caddy:2
+    command: ["caddy", "reverse-proxy", "--from", "${SERVOMON_DOMAIN:?Set SERVOMON_DOMAIN in .env}", "--to", "servomon:3000"]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - servomon
+    restart: unless-stopped
+
+volumes:
+  servomon-data:
+  caddy-data:
+  caddy-config:

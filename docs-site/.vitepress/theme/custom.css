@@ -1,0 +1,5 @@
+/* VitePress gives .vp-doc paragraphs a 28px line-height, overriding Mermaid's
+   measured 1.5em labels and clipping text inside fixed-height foreignObjects. */
+.vp-doc .mermaid p {
+  line-height: 1.5;
+}

@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "tasks": {
     "dev": "deno run -A --watch --unstable-unsafe-proto main.ts",
+    "test": "deno test --allow-all lib/*_test.ts",
     "build": "deno compile --output ./dist/servomon-agent --allow-all --unstable-unsafe-proto main.ts"
   },
   "imports": {

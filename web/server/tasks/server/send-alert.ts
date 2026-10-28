@@ -1,6 +1,7 @@
 import { PushSubscribersService } from "~/server/services/pushSubscribers.service";
 import { getSystemConfig } from "../../utils/metricsStore";
 import webpush from "web-push";
+import { resolveVapidKeys } from "../../utils/vapidKeys";
 
 export default defineTask({
   meta: {
@@ -34,20 +35,9 @@ export default defineTask({
 });
 
 async function sendPushAlerts(content: string) {
-  const {
-    public: { pushPublicKey },
-    pushPrivateKey,
-  } = useRuntimeConfig();
-
-  if (!pushPrivateKey || !pushPublicKey) {
-    throw new Error("No push public or private keys");
-  }
-
-  webpush.setVapidDetails(
-    "https://nkmonitor.fly.dev",
-    pushPublicKey,
-    pushPrivateKey
-  );
+  const keys = await resolveVapidKeys();
+  if (!keys) return;
+  webpush.setVapidDetails(useRuntimeConfig().pushSubject, keys.publicKey, keys.privateKey);
 
   const pushSubService = new PushSubscribersService();
 
@@ -59,13 +49,21 @@ async function sendPushAlerts(content: string) {
 
   console.log("Sending push notification");
 
-  let notificationPromises: any[] = [];
-
-  subs.forEach((sub) => {
-    notificationPromises.push(webpush.sendNotification(sub, content));
-  });
-
-  return Promise.allSettled(notificationPromises);
+  const expiredEndpoints: string[] = [];
+  await Promise.allSettled(subs.map(async (sub) => {
+    try {
+      await webpush.sendNotification(sub, content);
+    } catch (error) {
+      const status = error && typeof error === "object" && "statusCode" in error ? error.statusCode : undefined;
+      if (status === 404 || status === 410) {
+        expiredEndpoints.push(sub.endpoint);
+      } else {
+        console.error("[push] Notification delivery failed", error);
+      }
+    }
+  }));
+  // Serialize storage updates so two expired subscriptions cannot restore each other.
+  for (const endpoint of expiredEndpoints) await pushSubService.removeSubscription(endpoint);
 }
 
 async function sendDiscordAlert(content: string) {

@@ -107,93 +107,9 @@ let ws: CommandExecutorWebsocketClient | undefined;
 
 onMounted(async () => {
   connectMetrics();
-  await Promise.allSettled([setupWebsocket(), setupPushSubscription()]);
+  await setupWebsocket();
 });
 
-async function setupPushSubscription() {
-  const { $pwa } = useNuxtApp();
-
-  if (!$pwa || !$pwa.getSWRegistration()) {
-    console.log("no pwa object found");
-    setTimeout(setupPushSubscription, 300);
-    return;
-  }
-
-  const pushManager = $pwa.getSWRegistration()!.pushManager;
-
-  let subscription = await pushManager.getSubscription();
-
-  if (!subscription) {
-    const {
-      public: { pushPublicKey },
-    } = useRuntimeConfig();
-    // setup new sub
-    const newSub = await subscribeUserToPushNotifications(pushManager, pushPublicKey);
-
-    if (!newSub) {
-      return;
-    }
-    const storedNewSub = await storeSubscription(newSub);
-    if (!storedNewSub) {
-      console.log("couldn't store new sub");
-    }
-    return;
-  }
-
-  const subscriptionsStoredCheck = await $fetch("/api/check-subscription", {
-    params: { endpoint: subscription.endpoint },
-  });
-
-  if (!subscriptionsStoredCheck.isSubscribed) {
-    // store sub
-    const storedNewSub = await storeSubscription(subscription);
-    if (!storedNewSub) {
-      console.log("couldn't store new sub");
-    }
-    return;
-  }
-}
-
-async function storeSubscription(sub: PushSubscription) {
-  try {
-    // store sub to server
-    await $fetch("/api/subscriptions", {
-      method: "POST",
-      body: sub,
-    });
-    return true;
-  } catch (error) {
-    console.log(error);
-    return false;
-  }
-}
-
-async function subscribeUserToPushNotifications(
-  pushManager: PushManager,
-  publicKey: string,
-): Promise<PushSubscription | undefined> {
-  if (Notification.permission !== "granted") {
-    await Notification.requestPermission();
-  }
-  if (Notification.permission !== "granted") {
-    alert("Push notifications disabled because notification permission was denied");
-    return;
-  }
-
-  let newSub: PushSubscription;
-
-  try {
-    newSub = await pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: publicKey,
-    });
-  } catch (error) {
-    console.log("error trying to subscribe to push notifications", error);
-    return;
-  }
-
-  return newSub;
-}
 
 async function setupWebsocket() {
   if (ws) {

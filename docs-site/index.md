@@ -1,23 +1,36 @@
 ---
 layout: home
-
 hero:
   name: Servomon
-  text: Simple home server monitoring
-  tagline: Secure by default. One login, per-agent tokens, every command audited.
+  text: Your Linux servers, live.
+  tagline: See what is happening, act when needed, and get alerted when it matters. One dashboard for your homelab or hosted servers.
+  image:
+    src: /favicon.svg
+    alt: Servomon
   actions:
     - theme: brand
       text: Get started
       link: /guide
     - theme: alt
-      text: Watch the demo
-      link: /demo
-
+      text: GitHub
+      link: https://github.com/nirjan-dev/servomon
 features:
+  - title: The whole machine, at a glance
+    details: Live CPU, memory, disk, network, battery, processes and Docker container metrics — across multiple Linux servers.
+    link: /introduction
+  - title: Act without opening a terminal
+    details: Stop, pause or unpause containers and kill processes from a system's detail page. Commands are audit-logged.
+    link: /architecture
+  - title: Know when data is old
+    details: Live, stale and offline states distinguish a healthy connection from an old sample. No frozen dashboard pretending to be current.
+    link: /introduction
+  - title: Alerts where you need them
+    details: Web push and Discord alerts for downtime, low battery and low storage. Install the dashboard as a PWA on your phone.
+    link: /notifications
   - title: Secure by default
-    details: Operator login on every route, per-agent enrollment from the dashboard, single-use WebSocket tickets, audit-logged commands.
-  - title: Live, stale, offline
-    details: Every system shows data freshness at a glance, in the sidebar and on the overview — no more frozen dashboards pretending to be current.
+    details: Operator login, individual agent approval and revocation, single-use WebSocket tickets, and a command audit log.
+    link: /websocket-auth
   - title: Predictable retention
-    details: 24h window plus newest-500 cap with a never-empty floor; delta streaming keeps idle tabs near-zero bandwidth.
+    details: Metrics use a 24-hour window and newest-500 cap per system, retaining the newest five even after a quiet stretch. Persistent storage, no database to administer.
+    link: /architecture
 ---
