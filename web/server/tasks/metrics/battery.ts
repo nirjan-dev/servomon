@@ -1,5 +1,6 @@
 import { getMetricsForSystem, listSystems } from "../../utils/metricsStore";
 import { isLowBattery } from "../../utils/battery";
+import { sendAlert } from "../../utils/alerts";
 
 const batteryAlertThreshold = 50;
 
@@ -12,9 +13,13 @@ export default defineTask({
   async run(_event) {
     const systems = await listSystems();
 
-    systems.forEach((system) => {
-      batteryCheckForSystem(system);
-    });
+    await Promise.all(systems.map(async (system) => {
+      try {
+        await batteryCheckForSystem(system);
+      } catch (error) {
+        console.error("battery check failed for " + system, error);
+      }
+    }));
 
     return {};
   },
@@ -33,10 +38,5 @@ async function batteryCheckForSystem(system: string) {
     return;
   }
 
-  runTask("server:send-alert", {
-    payload: {
-      message: `Warning: Battery % lower than ${batteryAlertThreshold}% for ${system}`,
-      system,
-    },
-  });
+  await sendAlert(system, `Warning: Battery % lower than ${batteryAlertThreshold}% for ${system}`);
 }

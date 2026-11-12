@@ -14,7 +14,7 @@
     "generate:vapid-keys": "node scripts/generate-vapid-keys.mjs",
     "test:s1": "node --test test/s1-auth.test.mjs",
     "test:retention": "node --experimental-strip-types --test test/retention.test.mjs",
-    "test": "node --experimental-strip-types --test test/retention.test.mjs test/battery.test.mjs test/push.test.mjs && node --test test/s1-auth.test.mjs"
+    "test": "node --experimental-strip-types --test test/retention.test.mjs test/battery.test.mjs test/push.test.mjs && node --test test/s1-auth.test.mjs test/alerts.test.mjs"
   },
   "devDependencies": {
     "@flydotio/dockerfile": "^0.5.9",

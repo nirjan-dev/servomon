@@ -1,38 +1,33 @@
 import { PushSubscribersService } from "~/server/services/pushSubscribers.service";
-import { getSystemConfig } from "../../utils/metricsStore";
+import { getSystemConfig } from "./metricsStore";
 import webpush from "web-push";
-import { resolveVapidKeys } from "../../utils/vapidKeys";
+import { resolveVapidKeys } from "./vapidKeys";
 
-export default defineTask({
-  meta: {
-    name: "server:send-alert",
-    description: "Send alert when no metrics are available",
-  },
-  async run({ payload: { message, system } }) {
-    let alertMessage: string = (message as string) ?? "alert message not sent";
+let subscriptionCleanup = Promise.resolve();
 
-    const systemConfig = await getSystemConfig(system as string);
-
+export async function sendAlert(system: string, message: string) {
+  try {
+    const systemConfig = await getSystemConfig(system);
 
     if (systemConfig?.enableAlerts === false) {
       console.log("skipped alert because alerts disabled for " + system);
-      return {};
+      return;
     }
 
-    console.log("sending alert with message: ", alertMessage);
-    try {
-      await Promise.allSettled([
-        sendDiscordAlert(alertMessage),
-        sendPushAlerts(alertMessage),
-      ]);
-      console.log("successfully sent alerts");
-    } catch (error) {
-      console.log("alerts sending failed", error);
+    console.log("sending alert with message: ", message);
+    const results = await Promise.allSettled([
+      sendDiscordAlert(message),
+      sendPushAlerts(message),
+    ]);
+    for (const result of results) {
+      if (result.status === "rejected") {
+        console.error("alerts sending failed", result.reason);
+      }
     }
-
-    return {};
-  },
-});
+  } catch (error) {
+    console.error("alert config lookup failed for " + system, error);
+  }
+}
 
 async function sendPushAlerts(content: string) {
   const keys = await resolveVapidKeys();
@@ -62,8 +57,12 @@ async function sendPushAlerts(content: string) {
       }
     }
   }));
-  // Serialize storage updates so two expired subscriptions cannot restore each other.
-  for (const endpoint of expiredEndpoints) await pushSubService.removeSubscription(endpoint);
+  // Serialize cleanup across alerts so expired subscriptions cannot restore each other.
+  const cleanup = subscriptionCleanup.then(async () => {
+    for (const endpoint of expiredEndpoints) await pushSubService.removeSubscription(endpoint);
+  });
+  subscriptionCleanup = cleanup.catch(() => {});
+  await cleanup;
 }
 
 async function sendDiscordAlert(content: string) {

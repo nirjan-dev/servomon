@@ -2,6 +2,8 @@
 
 Servomon sends web push and Discord alerts for downtime/recovery, low battery and low storage. These checks are scheduled, not an immediate threshold evaluation on every sample; see the [task schedule](/architecture#scheduled-alerts).
 
+Qualifying systems are notified independently, and storage alerts are sent separately for each affected disk. Delivery failures are logged and do not stop other alerts.
+
 ## Enable web push
 
 1. Open your dashboard over **HTTPS** and log in. Push requires a browser secure context (localhost is a development exception).

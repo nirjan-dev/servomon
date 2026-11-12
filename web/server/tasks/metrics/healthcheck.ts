@@ -1,4 +1,5 @@
 import { getMetricsForSystem, listSystems } from "../../utils/metricsStore";
+import { sendAlert } from "../../utils/alerts";
 
 interface ServerStateKV {
   live: boolean;
@@ -33,9 +34,13 @@ export default defineTask({
   async run() {
     const systems = await listSystems();
 
-    systems.forEach((system) => {
-      healthCheckForSystem(system);
-    });
+    await Promise.all(systems.map(async (system) => {
+      try {
+        await healthCheckForSystem(system);
+      } catch (error) {
+        console.error("health check failed for " + system, error);
+      }
+    }));
 
     return {};
   },
@@ -60,12 +65,7 @@ async function healthCheckForSystem(system: string) {
 
     if (serverState?.live) {
       console.log("server set to live but no new metrics, sending alert...");
-      runTask("server:send-alert", {
-        payload: {
-          message: `No new metrics found, ${system} might be down`,
-          system,
-        },
-      });
+      await sendAlert(system, `No new metrics found, ${system} might be down`);
     }
     isServerLive = false;
   } else {
@@ -73,12 +73,7 @@ async function healthCheckForSystem(system: string) {
       console.log(
         "server not set to live but new metrics coming in now, sending alert..."
       );
-      runTask("server:send-alert", {
-        payload: {
-          message: `Metrics coming in again, ${system} might be up again`,
-          system,
-        },
-      });
+      await sendAlert(system, `Metrics coming in again, ${system} might be up again`);
     }
 
     isServerLive = true;

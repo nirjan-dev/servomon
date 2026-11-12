@@ -1,4 +1,5 @@
 import { getMetricsForSystem, listSystems } from "../../utils/metricsStore";
+import { sendAlert } from "../../utils/alerts";
 
 const storageAlertThreshold = 80;
 
@@ -11,9 +12,13 @@ export default defineTask({
   async run(_event) {
     const systems = await listSystems();
 
-    systems.forEach((system) => {
-      checkStorageForSystem(system);
-    });
+    await Promise.all(systems.map(async (system) => {
+      try {
+        await checkStorageForSystem(system);
+      } catch (error) {
+        console.error("storage check failed for " + system, error);
+      }
+    }));
 
     return {};
   },
@@ -27,14 +32,13 @@ async function checkStorageForSystem(system: string) {
 
   const latestMetric = metrics[0];
 
-  latestMetric.disk.forEach((diskStats) => {
+  await Promise.all(latestMetric.disk.map(async (diskStats) => {
     if (diskStats.usedPercentage >= storageAlertThreshold) {
-      runTask("server:send-alert", {
-        payload: {
-          message: `Warning: Disk used % greater than ${storageAlertThreshold}% for ${diskStats.mountPoint}`,
-          system,
-        },
-      });
+      try {
+        await sendAlert(system, `Warning: Disk used % greater than ${storageAlertThreshold}% for ${diskStats.mountPoint}`);
+      } catch (error) {
+        console.error("storage alert failed for " + system + " " + diskStats.mountPoint, error);
+      }
     }
-  });
+  }));
 }

@@ -3,6 +3,8 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   ssr: false,
   nitro: {
+    // Bundle the shared CLI generator into Nitro rather than externalizing its source path.
+    externals: { inline: [/[/\\]scripts[/\\]generate-vapid-keys\.mjs$/] },
     storage: {
       metrics: {
         driver: "fs",
