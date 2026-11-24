@@ -1,7 +1,7 @@
 {
   "name": "@servomon/agent",
   "exports": "./main.ts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "tasks": {
     "dev": "deno run -A --watch --unstable-unsafe-proto main.ts",
     "test": "deno test --allow-all lib/*_test.ts",
