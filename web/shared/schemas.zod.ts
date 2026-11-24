@@ -12,6 +12,7 @@ export const systemInfoSchema = z.object({
   os: z.string(),
   kernel: z.string(),
   device: z.string(),
+  uptime: z.number().optional(),
 });
 
 export const diskInfoSchema = z.object({
