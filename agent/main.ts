@@ -4,6 +4,7 @@ import { probeDockerSocket, resolveDockerSocket } from "./lib/dockerSocket.ts";
 import { startMetricsPusher } from "./lib/metricsPusher.ts";
 import { configureLogging, log } from "../shared/lib/log.ts";
 import { containerMemory } from "./lib/containerMemory.ts";
+import { parseSelfCommand, runSelfCommand } from "./lib/selfManage.ts";
 import "@std/dotenv/load";
 import type {
   Metrics,
@@ -27,9 +28,22 @@ if (Deno.args.length === 1 && Deno.args[0] === "--version") {
   console.log(version);
   Deno.exit(0);
 }
+const selfCommand = parseSelfCommand(Deno.args);
+if (selfCommand instanceof Error) {
+  console.error(selfCommand.message);
+  Deno.exit(1);
+}
+if (selfCommand) {
+  try {
+    Deno.exit(await runSelfCommand(selfCommand));
+  } catch (error) {
+    console.error(`servomon: ${error instanceof Error ? error.message : error}`);
+    Deno.exit(1);
+  }
+}
 const enrollOnly = Deno.args.length === 1 && Deno.args[0] === "enroll";
 if (Deno.args.length && !enrollOnly) {
-  console.error("Usage: servomon-agent [enroll | --version]");
+  console.error("Usage: servomon-agent [enroll | upgrade [--version vX.Y.Z] | uninstall | --version]");
   Deno.exit(1);
 }
 const LOG_LEVEL = Deno.env.get("LOG_LEVEL");

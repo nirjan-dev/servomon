@@ -4,7 +4,7 @@
 set -eu
 
 fail() { printf 'servomon: %s\n' "$*" >&2; exit 1; }
-usage() { printf '%s\n' 'Usage: install.sh --server URL [--name NAME] [--version vX.Y.Z] [--ca-cert FILE] [--no-docker-access] | --uninstall'; }
+usage() { printf '%s\n' 'Usage: install.sh [--server URL] [--name NAME] [--version vX.Y.Z] [--ca-cert FILE] [--no-docker-access] | --uninstall' '--server is required for a new install; upgrades keep the existing configuration.'; }
 server='' name='' version=latest uninstall=false ca_cert='' docker_access=true
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -24,7 +24,12 @@ done
 privileged() {
   if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi
 }
-service_user=${SUDO_USER:-$(id -un)}
+install_dir=/opt/servomon-agent
+unit=/etc/systemd/system/servomon-agent.service
+command_link=/usr/local/bin/servomon-agent
+# Upgrades keep the existing service user, whoever runs the upgrade.
+existing_user=$(sed -n 's/^User=//p' "$unit" 2>/dev/null | head -n 1)
+service_user=${existing_user:-${SUDO_USER:-$(id -un)}}
 service_home=$(getent passwd "$service_user" | cut -d: -f6)
 [ -n "$service_home" ] || fail "Cannot determine home for $service_user"
 as_service_user() {
@@ -34,8 +39,6 @@ as_service_user() {
     runuser -u "$service_user" -- env HOME="$service_home" "$@"
   fi
 }
-install_dir=/opt/servomon-agent
-unit=/etc/systemd/system/servomon-agent.service
 if [ "$uninstall" = true ]; then
   printf 'Remove servomon-agent, including its credentials and identity? [y/N] ' >&2
   if read -r answer 2>/dev/null </dev/tty; then :; else read -r answer; fi
@@ -44,19 +47,25 @@ if [ "$uninstall" = true ]; then
   privileged rm -f "$unit"
   privileged systemctl daemon-reload
   privileged rm -rf "$install_dir"
+  if [ "$(readlink "$command_link" 2>/dev/null)" = "$install_dir/servomon-agent" ]; then
+    privileged rm -f "$command_link"
+  fi
   printf '%s\n' 'Servomon agent uninstalled. Revoke its credentials in the dashboard as well.'
   exit 0
 fi
 
-[ -n "$server" ] || fail '--server URL is required'
+if [ -z "$server" ]; then
+  privileged test -f "$install_dir/.env" || fail '--server URL is required for a new install'
+else
+  case "$server" in http://*|https://*) ;; *) fail '--server must be an HTTP(S) URL';; esac
+  # These values go into a dotenv file, not a shell script.
+  case "$server" in *\"*|*\'*|*' '*|*'
+'*) fail '--server contains unsupported whitespace or quotes';; esac
+fi
 if [ -n "$ca_cert" ]; then
   [ -f "$ca_cert" ] && [ -r "$ca_cert" ] || fail '--ca-cert must be a readable file'
   grep -q 'BEGIN CERTIFICATE' "$ca_cert" || fail '--ca-cert must contain a PEM certificate'
 fi
-case "$server" in http://*|https://*) ;; *) fail '--server must be an HTTP(S) URL';; esac
-# These values go into a dotenv file, not a shell script.
-case "$server" in *\"*|*\'*|*' '*|*'
-'*) fail '--server contains unsupported whitespace or quotes';; esac
 [ -n "$name" ] || name=$(hostname | tr -d '\n' | tr -c 'A-Za-z0-9._-' '-')
 case "$name" in ''|*[!A-Za-z0-9._-]*) fail '--name must contain only letters, numbers, dots, underscores, or dashes';; esac
 case "$version" in latest|v[0-9]*.[0-9]*.[0-9]*) ;; *) fail '--version must be vX.Y.Z';; esac
@@ -171,4 +180,9 @@ else
   as_service_user ./servomon-agent enroll
 fi)
 privileged systemctl enable --now servomon-agent.service
-printf '%s\n' 'Servomon agent installed. Follow logs with:' 'journalctl -u servomon-agent -f'
+# Put `servomon-agent upgrade|uninstall` on PATH; never replace someone else's file.
+if [ -d "${command_link%/*}" ] && { [ ! -e "$command_link" ] || [ -L "$command_link" ]; }; then
+  privileged ln -sfn "$install_dir/servomon-agent" "$command_link"
+fi
+printf '%s\n' 'Servomon agent installed. Follow logs with:' 'journalctl -u servomon-agent -f' \
+  'Upgrade later with: servomon-agent upgrade' 'Remove with: servomon-agent uninstall'

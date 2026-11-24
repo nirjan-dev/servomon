@@ -19,7 +19,7 @@ stat -c '%U %G %a' /var/run/docker.sock
 
 A `docker socket not accessible; containers will not be reported` warning means the service user is not in that group (`docker` above). Fix it either way:
 
-- Re-run the installer. When the service user lacks access, it adds `SupplementaryGroups=<socket group>` to the unit (skipped with `--no-docker-access`).
+- Run `servomon-agent upgrade` (or re-run the installer). When the service user lacks access, the installer adds `SupplementaryGroups=<socket group>` to the unit (skipped with `--no-docker-access`).
 - Or add a systemd drop-in with `sudo systemctl edit servomon-agent`:
 
   ```ini
@@ -63,7 +63,7 @@ Do not copy an enrolled `.env` or identity file onto a different machine: that c
 
 ## Host flaps between down and up
 
-The server's healthcheck runs every minute and marks a system down when it has received no metrics from it for **3 minutes**, then up again when metrics resume. Older agents had no push timeout and could reuse a dead pooled connection, stalling for 15 minutes or more before recovering; on a flaky network that shows up as repeated down/up alerts. Upgrade the agent by re-running the installer: current agents time out each push after 10 seconds and retry on a fresh connection.
+The server's healthcheck runs every minute and marks a system down when it has received no metrics from it for **3 minutes**, then up again when metrics resume. Older agents had no push timeout and could reuse a dead pooled connection, stalling for 15 minutes or more before recovering; on a flaky network that shows up as repeated down/up alerts. Upgrade the agent (`servomon-agent upgrade`, or re-run the installer on agents older than v0.2.2): current agents time out each push after 10 seconds and retry on a fresh connection.
 
 If it still flaps, enable `LOG_LEVEL=debug` (see above) and look for push failures and recoveries:
 

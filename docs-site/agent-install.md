@@ -83,11 +83,24 @@ journalctl -u servomon-agent -f
 
 ## Upgrade
 
-Re-run the installer command. It upgrades the executable in place, keeps `.env` and identity, skips enrollment when a token already exists, and restarts the service. Existing configuration is preserved; edit the installed `.env` to change the server URL or name.
+Run this on the agent machine:
 
-To pin a release, pass **`--version v0.1.0`**. The default is `latest`. Version-pinned manual downloads use `/releases/download/v0.1.0/` in place of `/releases/latest/download/`.
+```sh
+servomon-agent upgrade                     # latest release
+servomon-agent upgrade --version v0.2.1    # pin a release
+```
+
+The installer links `/usr/local/bin/servomon-agent` to the installed executable, so the command works from any directory. It downloads that release's `install.sh`, checks it against the release's `SHA256SUMS`, and runs it; the installer prompts for `sudo` itself. The upgrade replaces the executable in place, keeps `.env`, identity, CA settings and the existing service user, skips enrollment when a token already exists, and restarts the service. Edit the installed `.env` to change the server URL or name.
+
+Agents installed before v0.2.2 have no `upgrade` command or PATH link yet: re-run the installer command once (`--server` can be omitted when `/opt/servomon-agent/.env` exists). Version-pinned manual downloads use `/releases/download/vX.Y.Z/` in place of `/releases/latest/download/`.
 
 ## Remove
+
+```sh
+servomon-agent uninstall
+```
+
+For agents older than v0.2.2:
 
 ```sh
 curl -fsSL https://github.com/nirjan-dev/servomon/releases/latest/download/install.sh | sh -s -- --uninstall
