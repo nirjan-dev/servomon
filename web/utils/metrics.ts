@@ -134,3 +134,80 @@ export function formatUptime(seconds: number | null | undefined): string {
   }
   return parts.slice(0, 2).join(", ");
 }
+
+// Chart time windows, persisted as `?period=` on the system page. Each window
+// ends at the newest sample; "all" is whatever the stream holds.
+export const PERIODS = [
+  { value: "5m", label: "5 min", ms: 5 * 60_000 },
+  { value: "15m", label: "15 min", ms: 15 * 60_000 },
+  { value: "30m", label: "30 min", ms: 30 * 60_000 },
+  { value: "all", label: "All", ms: null },
+] as const;
+
+export type Period = (typeof PERIODS)[number]["value"];
+
+// Unknown or absent query values fall back to "all".
+export function parsePeriod(value: unknown): Period {
+  return PERIODS.find((p) => p.value === value)?.value ?? "all";
+}
+
+// Time the samples stand for: n samples at a steady cadence cover n
+// intervals, one more than the first-to-last span. Expects ascending order.
+export function sampleCoverage(samples: readonly { timestamp: number }[]): number {
+  const n = samples.length;
+  if (n < 2) return 0;
+  const span = samples[n - 1]!.timestamp - samples[0]!.timestamp;
+  return span > 0 ? (span * n) / (n - 1) : 0;
+}
+
+// A window is offered only when the data covers it; "all" always is.
+export function periodAvailable(period: Period, coverage: number): boolean {
+  const ms = PERIODS.find((p) => p.value === period)?.ms;
+  return ms == null || ms <= coverage;
+}
+
+// Samples inside the window ending at the newest one. Expects ascending order.
+export function periodSamples<T extends { timestamp: number }>(samples: T[], period: Period): T[] {
+  const ms = PERIODS.find((p) => p.value === period)?.ms;
+  const newest = samples.at(-1);
+  if (ms == null || !newest) return samples;
+  const start = newest.timestamp - ms;
+  const first = samples.findIndex((s) => s.timestamp >= start);
+  return first <= 0 ? samples : samples.slice(first);
+}
+
+// Binary multipliers keyed by a unit's first letter ("bytes", "KiB", "MBs").
+const SIZE_UNITS: Record<string, number> = {
+  b: 1,
+  k: 1024,
+  m: 1024 ** 2,
+  g: 1024 ** 3,
+  t: 1024 ** 4,
+};
+
+// Agent value strings -> numbers for sorting. Percentages keep their number
+// ("12.34%" -> 12.34); sizes become bytes, binary like the agent computes them
+// ("200.00 MBs", "1.5 GiB", "512 KB" -> bytes). null when unparseable.
+export function parseQuantity(value: string | number | null | undefined): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (!value) return null;
+  const match = /^\s*(-?\d+(?:\.\d+)?)\s*(%|bytes|b|[kmgt]i?bs?)?\s*$/i.exec(value);
+  if (!match) return null;
+  const n = Number.parseFloat(match[1]!);
+  const unit = match[2]?.toLowerCase();
+  if (!unit || unit === "%") return n;
+  return n * SIZE_UNITS[unit[0]!]!;
+}
+
+// Numeric order for table sorting. Missing values sort last in both
+// directions, so "—" rows never crowd the top.
+export function compareMetric(
+  a: number | null | undefined,
+  b: number | null | undefined,
+  desc = false,
+): number {
+  const aMissing = a == null || !Number.isFinite(a);
+  const bMissing = b == null || !Number.isFinite(b);
+  if (aMissing || bMissing) return aMissing === bMissing ? 0 : aMissing ? 1 : -1;
+  return desc ? b - a : a - b;
+}

@@ -41,6 +41,10 @@ Other checks:
 - `DOCKER_SOCKET` overrides `DOCKER_HOST`, which overrides CLI context discovery. A stale explicit setting can point at the wrong engine. Metrics and command execution use the same resolved socket.
 - Docker CLI actions additionally need `docker` available to the service. Host metrics can work without Docker.
 
+## Container numbers differ from `docker stats`
+
+Servomon reports container CPU as a share of the **whole host**, the same scale as the host CPU figure and the process list. `docker stats` reports a share of **one core**, so on a 24-core host a container using 0.12 cores shows 12% there and 0.5% in Servomon. Container memory excludes reclaimable page cache (inactive file pages), matching `docker stats`; agents older than v0.2.1 included it, which made file-heavy containers such as qBittorrent or Jellyfin look like they used many GB.
+
 ## Pairing code expired, disappeared or denied
 
 Requests expire **15 minutes after creation**, not after approval. Restart enrollment to obtain a live request; restarting an agent while the same request is still live can reuse its code. A server restart loses pending requests, so request a new one. A denied request does not receive a token.

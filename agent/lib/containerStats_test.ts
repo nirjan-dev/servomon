@@ -1,5 +1,5 @@
 import { assertAlmostEquals, assertEquals } from "@std/assert";
-import { containerMemory } from "./containerMemory.ts";
+import { containerCpuPercent, containerMemory } from "./containerStats.ts";
 
 const MB = 1024 * 1024;
 
@@ -28,4 +28,21 @@ Deno.test("falls back to raw usage when cache stats are missing or inconsistent"
   assertEquals(containerMemory({ usage: 100, limit: 0 }), { usedBytes: 100, percent: 0 });
   assertEquals(containerMemory({ usage: 100, limit: 200, stats: { inactive_file: 150 } }).usedBytes, 100);
   assertEquals(containerMemory(undefined), { usedBytes: 0, percent: 0 });
+});
+
+Deno.test("container CPU is a share of the whole host, not of one core", () => {
+  // torrent-vpn on a 24-core host: 0.12 cores busy over 10 s. `docker stats` shows 12%.
+  const second = 1e9;
+  const percent = containerCpuPercent(
+    { cpu_usage: { total_usage: 5 * second + 1.2 * second }, system_cpu_usage: 1000 * second + 24 * 10 * second },
+    { cpu_usage: { total_usage: 5 * second }, system_cpu_usage: 1000 * second },
+  );
+  assertAlmostEquals(percent, 0.5, 1e-9);
+});
+
+Deno.test("container CPU uses the lifetime average without a previous sample and 0 on counter resets", () => {
+  assertEquals(containerCpuPercent({ cpu_usage: { total_usage: 10 }, system_cpu_usage: 100 }, undefined), 10);
+  assertEquals(containerCpuPercent({ cpu_usage: { total_usage: 10 }, system_cpu_usage: 100 }, {}), 10);
+  assertEquals(containerCpuPercent({ cpu_usage: { total_usage: 5 }, system_cpu_usage: 100 }, { cpu_usage: { total_usage: 10 }, system_cpu_usage: 50 }), 0);
+  assertEquals(containerCpuPercent(undefined, undefined), 0);
 });

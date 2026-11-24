@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { freshnessOf, useNow, type FreshnessState } from "~/composables/useFreshness";
 import { useFleet } from "~/composables/useFleet";
-import { FLEET_GRID } from "~/utils/layout";
+import { FLEET_GRID, PAGE_CONTENT } from "~/utils/layout";
 
 const { entries, pending, loaded, setAlerts, deleteSystem } = useFleet();
 const now = useNow();
@@ -52,53 +52,55 @@ const pendingTitle = computed(() =>
     </template>
 
     <template #body>
-      <UAlert
-        v-if="pending.length"
-        color="neutral"
-        variant="outline"
-        icon="i-lucide-key-round"
-        orientation="horizontal"
-        :title="pendingTitle"
-        description="Check the pairing code against the agent's terminal, then approve it."
-        :actions="[{ label: 'Review', to: '/agents', color: 'neutral', variant: 'solid' }]"
-      />
+      <div :class="PAGE_CONTENT">
+        <UAlert
+          v-if="pending.length"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-key-round"
+          orientation="horizontal"
+          :title="pendingTitle"
+          description="Check the pairing code against the agent's terminal, then approve it."
+          :actions="[{ label: 'Review', to: '/agents', color: 'neutral', variant: 'solid' }]"
+        />
 
-      <section v-if="entries.length" aria-label="Systems" class="overflow-hidden rounded-lg border border-default">
-        <div
-          :class="FLEET_GRID"
-          class="hidden border-b border-default bg-muted px-4 py-2 text-xs font-medium text-muted lg:grid"
-          aria-hidden="true"
-        >
-          <span>System</span>
-          <span>CPU</span>
-          <span>Memory</span>
-          <span>Disk</span>
-          <span>Network</span>
-          <span class="text-end">Alerts</span>
-        </div>
-        <ul class="divide-y divide-default">
-          <SystemRow
-            v-for="entry in entries"
-            :key="entry.name"
-            :entry="entry"
-            @alerts="(enabled: boolean) => setAlerts(entry.name, enabled)"
-            @delete="deleteSystem(entry.name)"
-          />
-        </ul>
-      </section>
+        <section v-if="entries.length" aria-label="Systems" class="overflow-hidden rounded-lg border border-default">
+          <div
+            :class="FLEET_GRID"
+            class="hidden border-b border-default bg-muted px-4 py-2 text-xs font-medium text-muted lg:grid"
+            aria-hidden="true"
+          >
+            <span>System</span>
+            <span>CPU</span>
+            <span>Memory</span>
+            <span>Disk</span>
+            <span>Network</span>
+            <span class="text-end">Alerts</span>
+          </div>
+          <ul class="divide-y divide-default">
+            <SystemRow
+              v-for="entry in entries"
+              :key="entry.name"
+              :entry="entry"
+              @alerts="(enabled: boolean) => setAlerts(entry.name, enabled)"
+              @delete="deleteSystem(entry.name)"
+            />
+          </ul>
+        </section>
 
-      <UEmpty
-        v-else-if="loaded"
-        icon="i-lucide-server"
-        title="No systems yet"
-        description="Install the agent on a machine you want to monitor: Agents → Add agent gives you a one-line command."
-        :actions="[
-          { label: 'Add agent', icon: 'i-lucide-plus', to: '/agents' },
-          { label: 'Setup guide', to: SETUP_GUIDE, target: '_blank', trailingIcon: 'i-lucide-arrow-up-right', color: 'neutral', variant: 'outline' },
-        ]"
-      />
+        <UEmpty
+          v-else-if="loaded"
+          icon="i-lucide-server"
+          title="No systems yet"
+          description="Install the agent on a machine you want to monitor: Agents → Add agent gives you a one-line command."
+          :actions="[
+            { label: 'Add agent', icon: 'i-lucide-plus', to: '/agents' },
+            { label: 'Setup guide', to: SETUP_GUIDE, target: '_blank', trailingIcon: 'i-lucide-arrow-up-right', color: 'neutral', variant: 'outline' },
+          ]"
+        />
 
-      <USkeleton v-else class="h-48 w-full" />
+        <USkeleton v-else class="h-48 w-full" />
+      </div>
     </template>
   </UDashboardPanel>
 </template>

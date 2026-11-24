@@ -3,7 +3,7 @@ import { enrollAgent } from "./lib/enroll.ts";
 import { probeDockerSocket, resolveDockerSocket } from "./lib/dockerSocket.ts";
 import { startMetricsPusher } from "./lib/metricsPusher.ts";
 import { configureLogging, log } from "../shared/lib/log.ts";
-import { containerMemory } from "./lib/containerMemory.ts";
+import { containerCpuPercent, containerMemory } from "./lib/containerStats.ts";
 import { parseSelfCommand, runSelfCommand } from "./lib/selfManage.ts";
 import "@std/dotenv/load";
 import type {
@@ -35,7 +35,7 @@ if (selfCommand instanceof Error) {
 }
 if (selfCommand) {
   try {
-    Deno.exit(await runSelfCommand(selfCommand));
+    Deno.exit(await runSelfCommand(selfCommand, version));
   } catch (error) {
     console.error(`servomon: ${error instanceof Error ? error.message : error}`);
     Deno.exit(1);
@@ -43,7 +43,7 @@ if (selfCommand) {
 }
 const enrollOnly = Deno.args.length === 1 && Deno.args[0] === "enroll";
 if (Deno.args.length && !enrollOnly) {
-  console.error("Usage: servomon-agent [enroll | upgrade [--version vX.Y.Z] | uninstall | --version]");
+  console.error("Usage: servomon-agent [enroll | upgrade [--version vX.Y.Z | --check] | uninstall | --version]");
   Deno.exit(1);
 }
 const LOG_LEVEL = Deno.env.get("LOG_LEVEL");
@@ -234,15 +234,16 @@ async function getContainersInfo(): Promise<ContainerInfo[]> {
   const rawContainerStats = await dockerContainerStats("*");
   const dockerContainersInfo = await dockerContainers();
   const containerStats: ContainerInfo[] = rawContainerStats
+    .map((stats) => ({ stats, cpuPercent: containerCpuPercent(stats.cpuStats, stats.precpuStats) }))
     .toSorted((a, b) => b.cpuPercent - a.cpuPercent)
-    .map((stats) => {
+    .map(({ stats, cpuPercent }) => {
       const statsInfo = dockerContainersInfo.find((c) => c.id === stats.id);
       const memory = containerMemory(stats.memoryStats);
 
       return {
         id: stats.id.split("").slice(0, 12).join(""),
         name: statsInfo?.name ?? "unknown",
-        cpuUsed: `${stats.cpuPercent.toFixed(2)}%`,
+        cpuUsed: `${cpuPercent.toFixed(2)}%`,
         memoryUsed: `${(memory.usedBytes / 1024 / 1024).toFixed(2)} MBs`,
         memoryUsedPercent: `${memory.percent.toFixed(2)}%`,
         state: statsInfo?.state ?? "unknown",

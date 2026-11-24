@@ -7,7 +7,7 @@ import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebs
 import { useFleet } from "~/composables/useFleet";
 import { useFreshness, useNow } from "~/composables/useFreshness";
 import { useMetricsStream } from "~/composables/useMetricsStream";
-import { osName } from "~/utils/layout";
+import { osName, PAGE_CONTENT } from "~/utils/layout";
 import {
   displayRate,
   formatGiB,
@@ -17,12 +17,20 @@ import {
   LEVEL_TEXT,
   levelOf,
   parsePercent,
+  parsePeriod,
   parseRate,
+  PERIODS,
+  periodAvailable,
+  periodSamples,
   rateScale,
+  sampleCoverage,
+  type Period,
 } from "~/utils/metrics";
 
 // Nuxt keys pages by route params, so switching systems remounts this page.
-const systemName = String(useRoute().params.name ?? "");
+const route = useRoute();
+const router = useRouter();
+const systemName = String(route.params.name ?? "");
 const { entries, setAlerts } = useFleet();
 const entry = computed(() => entries.value.find((e) => e.name === systemName));
 
@@ -37,8 +45,22 @@ const statusText = computed(
     ],
 );
 
+// Chart window from `?period=`; "all" stays out of the URL. A window the data
+// doesn't cover yet shows everything until the stream fills it.
+const period = computed({
+  get: () => parsePeriod(route.query.period),
+  set: (value: Period) =>
+    router.replace({ query: { ...route.query, period: value === "all" ? undefined : value } }),
+});
+const coverage = computed(() => sampleCoverage(metrics.value));
+const activePeriod = computed(() => (periodAvailable(period.value, coverage.value) ? period.value : "all"));
+const periodItems = computed(() =>
+  PERIODS.map((p) => ({ label: p.label, value: p.value, disabled: !periodAvailable(p.value, coverage.value) })),
+);
+const windowed = computed(() => periodSamples(metrics.value, activePeriod.value));
+
 const windowLabel = computed(() => {
-  const first = metrics.value[0]?.timestamp;
+  const first = windowed.value[0]?.timestamp;
   const last = latest.value?.timestamp;
   if (!first || !last || last <= first) return "";
   const minutes = Math.max(1, Math.round((last - first) / 60_000));
@@ -54,7 +76,7 @@ const networkSeries: ChartSeries[] = [
   { label: "Upload", value: (m) => parseRate(m.networkInfo.uploadPerSecond) ?? 0, color: "var(--chart-series-2)" },
 ];
 const networkScale = computed(() =>
-  rateScale(Math.max(0, ...metrics.value.flatMap((m) => networkSeries.map((s) => s.value(m))))),
+  rateScale(Math.max(0, ...windowed.value.flatMap((m) => networkSeries.map((s) => s.value(m))))),
 );
 
 const cpuLevel = computed(() => levelOf("cpu", latest.value?.cpu.used));
@@ -189,6 +211,17 @@ onBeforeUnmount(() => {
           </span>
         </template>
         <template #right>
+          <UTabs
+            v-if="latest"
+            :items="periodItems"
+            :model-value="activePeriod"
+            :content="false"
+            size="xs"
+            color="neutral"
+            class="hidden sm:flex"
+            aria-label="Chart time period"
+            @update:model-value="(value) => (period = parsePeriod(value))"
+          />
           <USwitch
             v-if="entry"
             :model-value="entry.alerts"
@@ -202,158 +235,184 @@ onBeforeUnmount(() => {
     </template>
 
     <template #body>
-      <span v-if="synced" class="flex items-center gap-1.5 text-sm sm:hidden" :class="statusText">
-        <StatusDot :color="freshness.color.value" />{{ freshness.label.value }}
-      </span>
-
-      <div v-if="!synced" class="grid gap-4 xl:grid-cols-2" aria-busy="true">
-        <USkeleton v-for="n in 4" :key="n" class="h-64 w-full" />
-      </div>
-
-      <UEmpty
-        v-else-if="!latest"
-        icon="i-lucide-activity"
-        :title="`No metrics from ${systemName} yet`"
-        description="Charts appear as soon as its agent reports."
-        :actions="[{ label: 'Back to overview', to: '/', color: 'neutral', variant: 'outline' }]"
-      />
-
-      <template v-else>
-        <div class="grid gap-4 xl:grid-cols-2">
-          <AppPanel>
-            <template #header>
-              <h2 class="text-sm font-semibold text-highlighted">CPU</h2>
-            </template>
-            <template #actions>
-              <span class="text-xs text-muted">{{ windowLabel }}</span>
-            </template>
-            <p class="flex items-baseline gap-2">
-              <span class="text-2xl font-semibold tabular-nums" :class="LEVEL_TEXT[cpuLevel]">
-                {{ formatPercent(latest.cpu.used) }}
-              </span>
-              <span class="text-sm text-muted">of {{ latest.cpu.cores }} cores</span>
-            </p>
-            <TimeSeriesChart
-              class="mt-3"
-              :data="metrics"
-              :series="cpuSeries"
-              :y-domain="[0, 100]"
-              :format="(v: number) => `${Math.round(v)}%`"
-              :label="`CPU usage over time, now ${formatPercent(latest.cpu.used)}`"
-            />
-          </AppPanel>
-
-          <AppPanel>
-            <template #header>
-              <h2 class="text-sm font-semibold text-highlighted">Memory</h2>
-            </template>
-            <template #actions>
-              <span class="text-xs text-muted">{{ windowLabel }}</span>
-            </template>
-            <p class="flex items-baseline gap-2">
-              <span class="text-2xl font-semibold tabular-nums" :class="LEVEL_TEXT[memLevel]">
-                {{ formatGiB(latest.memory.used) }}
-              </span>
-              <span class="text-sm text-muted tabular-nums">
-                of {{ formatGiB(latest.memory.total) }} · {{ formatPercent(latest.memory.usedPercentage) }}
-              </span>
-            </p>
-            <TimeSeriesChart
-              class="mt-3"
-              :data="metrics"
-              :series="memorySeries"
-              :y-domain="[0, latest.memory.total]"
-              :format="formatGiB"
-              :label="`Memory used over time, now ${formatGiB(latest.memory.used)}`"
-            />
-          </AppPanel>
+      <div :class="PAGE_CONTENT">
+        <div v-if="synced" class="flex flex-wrap items-center justify-between gap-2 sm:hidden">
+          <span class="flex items-center gap-1.5 text-sm" :class="statusText">
+            <StatusDot :color="freshness.color.value" />{{ freshness.label.value }}
+          </span>
+          <UTabs
+            v-if="latest"
+            :items="periodItems"
+            :model-value="activePeriod"
+            :content="false"
+            size="xs"
+            color="neutral"
+            aria-label="Chart time period"
+            @update:model-value="(value) => (period = parsePeriod(value))"
+          />
         </div>
 
-        <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-          <AppPanel class="lg:col-span-2 xl:col-span-1">
-            <template #header>
-              <h2 class="text-sm font-semibold text-highlighted">Network</h2>
-            </template>
-            <template #actions>
-              <span class="text-xs text-muted">{{ windowLabel }}</span>
-            </template>
-            <dl class="flex flex-wrap gap-x-6 gap-y-1">
-              <div class="flex items-center gap-2">
-                <dt class="flex items-center gap-1.5 text-sm text-muted">
-                  <span class="size-2 rounded-full bg-(--chart-series)" aria-hidden="true" />Download
-                </dt>
-                <dd class="font-semibold tabular-nums text-highlighted">
-                  {{ displayRate(latest.networkInfo.downloadPerSecond) }}
-                </dd>
-              </div>
-              <div class="flex items-center gap-2">
-                <dt class="flex items-center gap-1.5 text-sm text-muted">
-                  <span class="size-2 rounded-full bg-(--chart-series-2)" aria-hidden="true" />Upload
-                </dt>
-                <dd class="font-semibold tabular-nums text-highlighted">
-                  {{ displayRate(latest.networkInfo.uploadPerSecond) }}
-                </dd>
-              </div>
-            </dl>
-            <TimeSeriesChart
-              class="mt-3"
-              :data="metrics"
-              :series="networkSeries"
-              :y-domain="[0, networkScale.top]"
-              :y-ticks="networkScale.ticks"
-              :format="formatRate"
-              :height="132"
-              label="Network throughput over time"
-            />
-            <p v-if="!networkIssues.length" class="mt-2 text-xs text-muted">No errors or dropped packets.</p>
-            <ul v-else class="mt-2 flex flex-wrap gap-x-4 text-xs text-warning">
-              <li v-for="[label, value] in networkIssues" :key="label">{{ label }} {{ value }}</li>
-            </ul>
-          </AppPanel>
-
-          <AppPanel title="Storage">
-            <ul class="flex flex-col gap-4">
-              <li v-for="disk in disks" :key="`${disk.device}${disk.mountPoint}`">
-                <div class="flex items-baseline justify-between gap-3">
-                  <span class="min-w-0 truncate font-mono text-sm text-highlighted" :title="disk.device">
-                    {{ disk.mountPoint }}
-                  </span>
-                  <span class="shrink-0 text-sm font-medium tabular-nums" :class="LEVEL_TEXT[levelOf('disk', disk.usedPercentage)]">
-                    {{ formatPercent(disk.usedPercentage) }}
-                  </span>
-                </div>
-                <UsageMeter
-                  class="mt-1.5"
-                  :percent="disk.usedPercentage"
-                  :level="levelOf('disk', disk.usedPercentage)"
-                  :label="`${disk.mountPoint} used`"
-                />
-                <p class="mt-1 text-xs text-muted tabular-nums">
-                  {{ formatGiB(disk.used) }} of {{ formatGiB(disk.total) }} · {{ formatGiB(disk.free) }} free
-                </p>
-              </li>
-              <li v-if="!disks.length" class="text-sm text-muted">No disks reported</li>
-            </ul>
-          </AppPanel>
-
-          <AppPanel title="System">
-            <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
-              <template v-for="[label, value, title] in details" :key="label">
-                <dt class="text-muted">{{ label }}</dt>
-                <dd class="truncate text-end text-highlighted tabular-nums" :title="title ?? value">{{ value }}</dd>
-              </template>
-            </dl>
-          </AppPanel>
+        <div v-if="!synced" class="grid gap-4 xl:grid-cols-2" aria-busy="true">
+          <USkeleton v-for="n in 4" :key="n" class="h-64 w-full" />
         </div>
 
-        <ContainerTable
-          v-if="containers.length"
-          v-model:selection="containerSelection"
-          :containers="containers"
-          @command="runDockerCommand"
+        <UEmpty
+          v-else-if="!latest"
+          icon="i-lucide-activity"
+          :title="`No metrics from ${systemName} yet`"
+          description="Charts appear as soon as its agent reports."
+          :actions="[{ label: 'Back to overview', to: '/', color: 'neutral', variant: 'outline' }]"
         />
-        <ProcessTable v-model:selection="processSelection" :processes="processes" @kill="killProcesses" />
-      </template>
+
+        <template v-else>
+          <!-- 2xl+: one six-column grid (the inner grids dissolve via `contents`):
+               CPU, Memory, Network side by side, then Storage beside System. -->
+          <div class="grid gap-4 sm:gap-6 2xl:grid-cols-6 2xl:gap-4">
+            <div class="grid gap-4 xl:grid-cols-2 2xl:contents">
+              <AppPanel class="2xl:col-span-2">
+                <template #header>
+                  <h2 class="text-sm font-semibold text-highlighted">CPU</h2>
+                </template>
+                <template #actions>
+                  <span class="text-xs text-muted">{{ windowLabel }}</span>
+                </template>
+                <p class="flex items-baseline gap-2">
+                  <span class="text-2xl font-semibold tabular-nums" :class="LEVEL_TEXT[cpuLevel]">
+                    {{ formatPercent(latest.cpu.used) }}
+                  </span>
+                  <span class="text-sm text-muted">of {{ latest.cpu.cores }} cores</span>
+                </p>
+                <TimeSeriesChart
+                  class="mt-3"
+                  :data="windowed"
+                  :series="cpuSeries"
+                  :y-domain="[0, 100]"
+                  :format="(v: number) => `${Math.round(v)}%`"
+                  :label="`CPU usage over time, now ${formatPercent(latest.cpu.used)}`"
+                />
+              </AppPanel>
+
+              <AppPanel class="2xl:col-span-2">
+                <template #header>
+                  <h2 class="text-sm font-semibold text-highlighted">Memory</h2>
+                </template>
+                <template #actions>
+                  <span class="text-xs text-muted">{{ windowLabel }}</span>
+                </template>
+                <p class="flex items-baseline gap-2">
+                  <span class="text-2xl font-semibold tabular-nums" :class="LEVEL_TEXT[memLevel]">
+                    {{ formatGiB(latest.memory.used) }}
+                  </span>
+                  <span class="text-sm text-muted tabular-nums">
+                    of {{ formatGiB(latest.memory.total) }} · {{ formatPercent(latest.memory.usedPercentage) }}
+                  </span>
+                </p>
+                <TimeSeriesChart
+                  class="mt-3"
+                  :data="windowed"
+                  :series="memorySeries"
+                  :y-domain="[0, latest.memory.total]"
+                  :format="formatGiB"
+                  :label="`Memory used over time, now ${formatGiB(latest.memory.used)}`"
+                />
+              </AppPanel>
+            </div>
+
+            <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3 2xl:contents">
+              <AppPanel class="lg:col-span-2 xl:col-span-1 2xl:col-span-2">
+                <template #header>
+                  <h2 class="text-sm font-semibold text-highlighted">Network</h2>
+                </template>
+                <template #actions>
+                  <span class="text-xs text-muted">{{ windowLabel }}</span>
+                </template>
+                <dl class="flex flex-wrap gap-x-6 gap-y-1">
+                  <div class="flex items-center gap-2">
+                    <dt class="flex items-center gap-1.5 text-sm text-muted">
+                      <span class="size-2 rounded-full bg-(--chart-series)" aria-hidden="true" />Download
+                    </dt>
+                    <dd class="font-semibold tabular-nums text-highlighted">
+                      {{ displayRate(latest.networkInfo.downloadPerSecond) }}
+                    </dd>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <dt class="flex items-center gap-1.5 text-sm text-muted">
+                      <span class="size-2 rounded-full bg-(--chart-series-2)" aria-hidden="true" />Upload
+                    </dt>
+                    <dd class="font-semibold tabular-nums text-highlighted">
+                      {{ displayRate(latest.networkInfo.uploadPerSecond) }}
+                    </dd>
+                  </div>
+                </dl>
+                <TimeSeriesChart
+                  class="mt-3"
+                  :data="windowed"
+                  :series="networkSeries"
+                  :y-domain="[0, networkScale.top]"
+                  :y-ticks="networkScale.ticks"
+                  :format="formatRate"
+                  :height="132"
+                  label="Network throughput over time"
+                />
+                <p v-if="!networkIssues.length" class="mt-2 text-xs text-muted">No errors or dropped packets.</p>
+                <ul v-else class="mt-2 flex flex-wrap gap-x-4 text-xs text-warning">
+                  <li v-for="[label, value] in networkIssues" :key="label">{{ label }} {{ value }}</li>
+                </ul>
+              </AppPanel>
+
+              <AppPanel title="Storage" class="2xl:col-span-3">
+                <ul class="flex flex-col gap-4">
+                  <li v-for="disk in disks" :key="`${disk.device}${disk.mountPoint}`">
+                    <div class="flex items-baseline justify-between gap-3">
+                      <span class="min-w-0 truncate font-mono text-sm text-highlighted" :title="disk.device">
+                        {{ disk.mountPoint }}
+                      </span>
+                      <span class="shrink-0 text-sm font-medium tabular-nums" :class="LEVEL_TEXT[levelOf('disk', disk.usedPercentage)]">
+                        {{ formatPercent(disk.usedPercentage) }}
+                      </span>
+                    </div>
+                    <UsageMeter
+                      class="mt-1.5"
+                      :percent="disk.usedPercentage"
+                      :level="levelOf('disk', disk.usedPercentage)"
+                      :label="`${disk.mountPoint} used`"
+                    />
+                    <p class="mt-1 text-xs text-muted tabular-nums">
+                      {{ formatGiB(disk.used) }} of {{ formatGiB(disk.total) }} · {{ formatGiB(disk.free) }} free
+                    </p>
+                  </li>
+                  <li v-if="!disks.length" class="text-sm text-muted">No disks reported</li>
+                </ul>
+              </AppPanel>
+
+              <AppPanel title="System" class="2xl:col-span-3">
+                <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+                  <template v-for="[label, value, title] in details" :key="label">
+                    <dt class="text-muted">{{ label }}</dt>
+                    <dd class="truncate text-end text-highlighted tabular-nums" :title="title ?? value">{{ value }}</dd>
+                  </template>
+                </dl>
+              </AppPanel>
+            </div>
+          </div>
+
+          <!-- Very wide screens: containers beside processes. -->
+          <div class="grid items-start gap-4 sm:gap-6 min-[120rem]:grid-cols-2 min-[120rem]:gap-4">
+            <ContainerTable
+              v-if="containers.length"
+              v-model:selection="containerSelection"
+              :containers="containers"
+              @command="runDockerCommand"
+            />
+            <ProcessTable
+              v-model:selection="processSelection"
+              :class="{ 'min-[120rem]:col-span-2': !containers.length }"
+              :processes="processes"
+              @kill="killProcesses"
+            />
+          </div>
+        </template>
+      </div>
     </template>
   </UDashboardPanel>
 </template>

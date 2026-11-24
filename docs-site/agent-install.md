@@ -86,6 +86,7 @@ journalctl -u servomon-agent -f
 Run this on the agent machine:
 
 ```sh
+servomon-agent upgrade --check             # only report whether a newer release exists
 servomon-agent upgrade                     # latest release
 servomon-agent upgrade --version v0.2.1    # pin a release
 ```

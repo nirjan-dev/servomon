@@ -4,6 +4,7 @@ export type ContainerRow = {
   state: string;
   cpu: number | null;
   memory: string;
+  memoryBytes: number | null;
   memoryPercent: number | null;
 };
 export type DockerAction = "stop" | "pause" | "unpause";
@@ -13,7 +14,7 @@ export type DockerAction = "stop" | "pause" | "unpause";
 import { h, resolveComponent } from "vue";
 import type { TableColumn } from "@nuxt/ui";
 import type { ContainerInfo } from "../../shared/types";
-import { displayMiB, formatPercent, parsePercent } from "~/utils/metrics";
+import { compareMetric, displayMiB, formatPercent, parsePercent, parseQuantity } from "~/utils/metrics";
 const props = defineProps<{ containers: ContainerInfo[] }>();
 // Keyed by container name; the page pauses table updates while anything is selected.
 const selection = defineModel<Record<string, boolean>>("selection", { required: true });
@@ -21,6 +22,7 @@ const emit = defineEmits<{ command: [action: DockerAction, rows: ContainerRow[]]
 
 const UCheckbox = resolveComponent("UCheckbox");
 const UBadge = resolveComponent("UBadge");
+const UButton = resolveComponent("UButton");
 
 const STATE_COLOR: Record<string, "success" | "warning" | "info" | "neutral"> = {
   running: "success",
@@ -28,15 +30,26 @@ const STATE_COLOR: Record<string, "success" | "warning" | "info" | "neutral"> = 
   restarting: "info",
 };
 
-const rows = computed<ContainerRow[]>(() =>
-  props.containers.map((c) => ({
-    name: c.name,
-    state: c.state,
-    cpu: parsePercent(c.cpuUsed),
-    memory: displayMiB(c.memoryUsed),
-    memoryPercent: parsePercent(c.memoryUsedPercent),
-  })),
-);
+// One numeric column at a time; CPU descending matches the agent's own order.
+// Rows are sorted here (missing values last), so UTable sorts manually and
+// only tracks the state for header icons and aria-sort.
+type SortId = "cpu" | "memoryBytes";
+const sorting = ref([{ id: "cpu", desc: true }]);
+
+const rows = computed<ContainerRow[]>(() => {
+  const { desc } = sorting.value[0] ?? { desc: true };
+  const id = (sorting.value[0]?.id ?? "cpu") as SortId;
+  return props.containers
+    .map((c) => ({
+      name: c.name,
+      state: c.state,
+      cpu: parsePercent(c.cpuUsed),
+      memory: displayMiB(c.memoryUsed),
+      memoryBytes: parseQuantity(c.memoryUsed),
+      memoryPercent: parsePercent(c.memoryUsedPercent),
+    }))
+    .sort((a, b) => compareMetric(a[id], b[id], desc));
+});
 const selected = computed(() => rows.value.filter((row) => selection.value[row.name]));
 
 const NUMERIC = { th: "text-end", td: "text-end tabular-nums" };
@@ -48,6 +61,25 @@ function stateBadge(state: string, extraClass = "") {
     variant: "subtle",
     size: "md",
     class: `capitalize ${extraClass}`,
+  });
+}
+
+// Header button for a numeric column: first click sorts descending, then flips.
+function sortHeader(label: string, column: { getIsSorted(): false | "asc" | "desc"; toggleSorting(desc?: boolean): void }) {
+  const sorted = column.getIsSorted();
+  return h(UButton, {
+    label,
+    color: "neutral",
+    variant: "ghost",
+    size: "xs",
+    trailingIcon:
+      sorted === "asc"
+        ? "i-lucide-arrow-up-narrow-wide"
+        : sorted === "desc"
+          ? "i-lucide-arrow-down-wide-narrow"
+          : "i-lucide-arrow-up-down",
+    class: ["-mx-2 -my-1 text-xs font-medium", sorted ? "text-highlighted" : "text-muted"],
+    onClick: () => column.toggleSorting(sorted !== "desc"),
   });
 }
 
@@ -84,8 +116,20 @@ const columns: TableColumn<ContainerRow>[] = [
     cell: ({ row }) => stateBadge(row.original.state),
     meta: { class: { th: "hidden sm:table-cell", td: "hidden sm:table-cell" } },
   },
-  { accessorKey: "cpu", header: "CPU", cell: ({ row }) => formatPercent(row.original.cpu, 1), meta: { class: NUMERIC } },
-  { accessorKey: "memory", header: "Memory", meta: { class: NUMERIC } },
+  {
+    accessorKey: "cpu",
+    header: ({ column }) => sortHeader("CPU", column),
+    cell: ({ row }) => formatPercent(row.original.cpu, 1),
+    enableSorting: true,
+    meta: { class: NUMERIC },
+  },
+  {
+    accessorKey: "memoryBytes",
+    header: ({ column }) => sortHeader("Memory", column),
+    cell: ({ row }) => row.original.memory,
+    enableSorting: true,
+    meta: { class: NUMERIC },
+  },
   {
     accessorKey: "memoryPercent",
     header: "Mem %",
@@ -138,6 +182,8 @@ const columns: TableColumn<ContainerRow>[] = [
     </template>
     <UTable
       v-model:row-selection="selection"
+      v-model:sorting="sorting"
+      :sorting-options="{ manualSorting: true }"
       :data="rows"
       :columns="columns"
       :get-row-id="(row: ContainerRow) => row.name"

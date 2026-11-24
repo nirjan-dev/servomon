@@ -1,5 +1,5 @@
 import { assertEquals, assertInstanceOf, assertRejects } from "@std/assert";
-import { installerChecksum, parseSelfCommand, runSelfCommand } from "./selfManage.ts";
+import { installerChecksum, parseSelfCommand, runSelfCommand, updateStatus } from "./selfManage.ts";
 
 Deno.test("parses upgrade and uninstall commands", () => {
   assertEquals(parseSelfCommand(["upgrade"]), { action: "upgrade" });
@@ -44,11 +44,11 @@ Deno.test("upgrade and uninstall run the verified installer with matching flags"
   const out = await Deno.makeTempFile();
   try {
     await withRelease(recorder(out), null, async () => {
-      assertEquals(await runSelfCommand({ action: "upgrade", version: "v0.2.1" }), 3);
+      assertEquals(await runSelfCommand({ action: "upgrade", version: "v0.2.1" }, "0.0.0"), 3);
       assertEquals(await Deno.readTextFile(out), "--version v0.2.1\n");
-      assertEquals(await runSelfCommand({ action: "upgrade" }), 3);
+      assertEquals(await runSelfCommand({ action: "upgrade" }, "0.0.0"), 3);
       assertEquals(await Deno.readTextFile(out), "\n");
-      assertEquals(await runSelfCommand({ action: "uninstall" }), 3);
+      assertEquals(await runSelfCommand({ action: "uninstall" }, "0.0.0"), 3);
       assertEquals(await Deno.readTextFile(out), "--uninstall\n");
     });
   } finally {
@@ -60,10 +60,18 @@ Deno.test("a tampered installer is never run", async () => {
   const out = await Deno.makeTempFile();
   try {
     await withRelease(recorder(out), "0".repeat(64), async () => {
-      await assertRejects(() => runSelfCommand({ action: "upgrade" }), Error, "checksum mismatch");
+      await assertRejects(() => runSelfCommand({ action: "upgrade" }, "0.0.0"), Error, "checksum mismatch");
     });
     assertEquals(await Deno.readTextFile(out), "");
   } finally {
     await Deno.remove(out);
   }
+});
+
+Deno.test("upgrade --check reports pending updates by numeric version order", () => {
+  assertEquals(parseSelfCommand(["upgrade", "--check"]), { action: "check" });
+  assertInstanceOf(parseSelfCommand(["upgrade", "--check", "--version", "v1.0.0"]), Error);
+  assertEquals(updateStatus("0.2.2", "v0.2.2"), "servomon-agent v0.2.2 is up to date.");
+  assertEquals(updateStatus("0.2.9", "v0.2.10"), "Update available: v0.2.9 -> v0.2.10. Run: servomon-agent upgrade");
+  assertEquals(updateStatus("0.3.0", "v0.2.10"), "servomon-agent v0.3.0 is newer than the latest release (v0.2.10).");
 });

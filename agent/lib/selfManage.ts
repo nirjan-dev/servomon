@@ -1,15 +1,18 @@
-// `servomon-agent upgrade [--version vX.Y.Z]` and `servomon-agent uninstall`.
-// Both delegate to the release's install.sh so there is one installer, and
-// verify it against the release's SHA256SUMS before running it.
+// `servomon-agent upgrade [--version vX.Y.Z | --check]` and `servomon-agent uninstall`.
+// Upgrade and uninstall delegate to the release's install.sh so there is one
+// installer, and verify it against the release's SHA256SUMS before running it.
 
 const RELEASES = "https://github.com/nirjan-dev/servomon/releases";
 const VERSION_PATTERN = /^v\d+\.\d+\.\d+$/;
 
 export type SelfCommand =
   | { action: "upgrade"; version?: string }
+  | { action: "check" }
   | { action: "uninstall" };
 
-/** Parses `upgrade [--version vX.Y.Z]` / `uninstall`; null when args are not a self-management command. */
+const UPGRADE_USAGE = "Usage: servomon-agent upgrade [--version vX.Y.Z | --check]";
+
+/** Parses `upgrade [--version vX.Y.Z | --check]` / `uninstall`; null when args are not a self-management command. */
 export function parseSelfCommand(args: string[]): SelfCommand | Error | null {
   const [command, ...rest] = args;
   if (command === "uninstall") {
@@ -17,12 +20,43 @@ export function parseSelfCommand(args: string[]): SelfCommand | Error | null {
   }
   if (command !== "upgrade") return null;
   if (rest.length === 0) return { action: "upgrade" };
+  if (rest.length === 1 && rest[0] === "--check") return { action: "check" };
   if (rest.length === 2 && rest[0] === "--version") {
     const version = rest[1].startsWith("v") ? rest[1] : `v${rest[1]}`;
     if (!VERSION_PATTERN.test(version)) return new Error("--version must be vX.Y.Z");
     return { action: "upgrade", version };
   }
-  return new Error("Usage: servomon-agent upgrade [--version vX.Y.Z]");
+  return new Error(UPGRADE_USAGE);
+}
+
+/** Negative when `a` is older than `b`, 0 when equal, positive when newer. */
+export function compareVersions(a: string, b: string): number {
+  const [left, right] = [a, b].map((version) => version.replace(/^v/, "").split(".").map(Number));
+  for (let i = 0; i < 3; i++) {
+    const difference = (left[i] ?? 0) - (right[i] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+export function updateStatus(current: string, latest: string): string {
+  const installed = `v${current.replace(/^v/, "")}`;
+  const comparison = compareVersions(installed, latest);
+  if (comparison < 0) return `Update available: ${installed} -> ${latest}. Run: servomon-agent upgrade`;
+  if (comparison > 0) return `servomon-agent ${installed} is newer than the latest release (${latest}).`;
+  return `servomon-agent ${installed} is up to date.`;
+}
+
+/** Reads the latest release tag from GitHub's /releases/latest redirect (no API rate limit). */
+async function latestReleaseVersion(): Promise<string> {
+  const response = await fetch(`${RELEASES}/latest`, {
+    redirect: "manual",
+    signal: AbortSignal.timeout(30_000),
+  });
+  await response.body?.cancel();
+  const tag = /\/releases\/tag\/(v\d+\.\d+\.\d+)$/.exec(response.headers.get("location") ?? "")?.[1];
+  if (!tag) throw new Error(`Could not determine the latest release (HTTP ${response.status})`);
+  return tag;
 }
 
 /** Finds install.sh's digest in a SHA256SUMS manifest; exact filename match only. */
@@ -52,8 +86,12 @@ async function sha256Hex(data: Uint8Array<ArrayBuffer>): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Downloads, verifies and runs the installer; returns its exit code. */
-export async function runSelfCommand(command: SelfCommand): Promise<number> {
+/** Runs a self-management command; returns the process exit code. */
+export async function runSelfCommand(command: SelfCommand, currentVersion: string): Promise<number> {
+  if (command.action === "check") {
+    console.log(updateStatus(currentVersion, await latestReleaseVersion()));
+    return 0;
+  }
   const version = command.action === "upgrade" ? command.version : undefined;
   // Same override the installer honors, for mirrors and testing.
   const base = Deno.env.get("SERVOMON_RELEASE_BASE_URL") ??
