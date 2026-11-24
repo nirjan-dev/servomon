@@ -3,6 +3,7 @@ import { enrollAgent } from "./lib/enroll.ts";
 import { probeDockerSocket, resolveDockerSocket } from "./lib/dockerSocket.ts";
 import { startMetricsPusher } from "./lib/metricsPusher.ts";
 import { configureLogging, log } from "../shared/lib/log.ts";
+import { containerMemory } from "./lib/containerMemory.ts";
 import "@std/dotenv/load";
 import type {
   Metrics,
@@ -222,13 +223,14 @@ async function getContainersInfo(): Promise<ContainerInfo[]> {
     .toSorted((a, b) => b.cpuPercent - a.cpuPercent)
     .map((stats) => {
       const statsInfo = dockerContainersInfo.find((c) => c.id === stats.id);
+      const memory = containerMemory(stats.memoryStats);
 
       return {
         id: stats.id.split("").slice(0, 12).join(""),
         name: statsInfo?.name ?? "unknown",
         cpuUsed: `${stats.cpuPercent.toFixed(2)}%`,
-        memoryUsed: `${(stats.memUsage / 1024 / 1024).toFixed(2)} MBs`,
-        memoryUsedPercent: `${stats.memPercent.toFixed(2)}%`,
+        memoryUsed: `${(memory.usedBytes / 1024 / 1024).toFixed(2)} MBs`,
+        memoryUsedPercent: `${memory.percent.toFixed(2)}%`,
         state: statsInfo?.state ?? "unknown",
       };
     });
