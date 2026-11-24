@@ -10,6 +10,7 @@ import { commandSchema } from "../schemas/schemas.zod.ts";
 import { CommandResult } from "../../shared/types.ts";
 
 import { dockerCommandEnvironment } from "./dockerSocket.ts";
+import { log } from "../../shared/lib/log.ts";
 
 export class CommandResponderWebsocketClient extends WebsocketClient {
   constructor(config: WebsocketClientConfig) {
@@ -54,13 +55,13 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
         this.sendCommandResult(result);
       }
     } catch (error) {
-      console.log("error parsing command", error);
+      log.error("command handling failed", { error });
     }
   }
   private async handleDockerCommands(
     command: DockerCommand
   ): Promise<DockerCommandResult> {
-    console.log("handling docker command", command);
+    log.debug("docker command received", { action: command.action, container: command.containerName });
 
     let process;
 
@@ -89,12 +90,16 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
 
     if (process) {
       const output = await process.output();
+      const error = new TextDecoder().decode(output.stderr);
+      if (output.code !== 0) {
+        log.warn("docker command failed", { action: command.action, container: command.containerName, exitCode: output.code, error });
+      }
 
       return {
         success: output.code === 0,
         timestamp: Date.now(),
         containerName: command.containerName,
-        error: new TextDecoder().decode(output.stderr),
+        error,
       };
     }
 
@@ -113,7 +118,7 @@ export class CommandResponderWebsocketClient extends WebsocketClient {
   private async handleProcessCommands(
     command: ProcessCommand
   ): Promise<ProcessCommandResult> {
-    console.log("handling process command", command);
+    log.debug("process command received", { action: command.action, pid: command.pid, process: command.processName });
 
     let process;
     switch (command.action) {

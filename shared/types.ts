@@ -9,6 +9,8 @@ export interface SystemInfo {
   os: string;
   kernel: string;
   device: string;
+  /** Seconds since the host last booted, sampled with the metric. Absent from older agents. */
+  uptime?: number;
 }
 
 export interface DiskInfo {

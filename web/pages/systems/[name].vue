@@ -5,7 +5,7 @@ import type { ContainerRow, DockerAction } from "~/components/ContainerTable.vue
 import type { ProcessRow } from "~/components/ProcessTable.vue";
 import { CommandExecutorWebsocketClient } from "~/shared/lib/CommandExecutorWebsocketClient";
 import { useFleet } from "~/composables/useFleet";
-import { useFreshness } from "~/composables/useFreshness";
+import { useFreshness, useNow } from "~/composables/useFreshness";
 import { useMetricsStream } from "~/composables/useMetricsStream";
 import { osName } from "~/utils/layout";
 import {
@@ -13,6 +13,7 @@ import {
   formatGiB,
   formatPercent,
   formatRate,
+  formatUptime,
   LEVEL_TEXT,
   levelOf,
   parsePercent,
@@ -75,13 +76,25 @@ const networkIssues = computed(() => {
 });
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-const details = computed(() => {
+const bootFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+// Shared page clock (already ticking for freshness), not a new timer.
+const now = useNow();
+const details = computed<[label: string, value: string, title?: string][]>(() => {
   const m = latest.value;
   if (!m) return [];
+  const uptime = m.systemInfo.uptime;
+  // Count forward from the sample while the host is reporting; freeze once
+  // offline, since it may have rebooted since.
+  const elapsed = freshness.state.value === "offline" ? 0 : Math.max(0, now.value - m.timestamp) / 1000;
   return [
     ["OS", osName(m.systemInfo.os) || "—"],
     ["Kernel", m.systemInfo.kernel || "—"],
     ["Device", m.systemInfo.device || "—"],
+    [
+      "Uptime",
+      formatUptime(uptime == null ? uptime : uptime + elapsed),
+      uptime == null ? undefined : `Booted ${bootFormat.format(m.timestamp - uptime * 1000)}`,
+    ],
     ["CPU", `${m.cpu.cores} cores`],
     // The agent reports 0 when the machine has no battery.
     ["Battery", m.battery.charge > 0 ? `${m.battery.charge}%` : "Not detected"],
@@ -325,9 +338,9 @@ onBeforeUnmount(() => {
 
           <AppPanel title="System">
             <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
-              <template v-for="[label, value] in details" :key="label">
+              <template v-for="[label, value, title] in details" :key="label">
                 <dt class="text-muted">{{ label }}</dt>
-                <dd class="truncate text-end text-highlighted tabular-nums" :title="value">{{ value }}</dd>
+                <dd class="truncate text-end text-highlighted tabular-nums" :title="title ?? value">{{ value }}</dd>
               </template>
             </dl>
           </AppPanel>

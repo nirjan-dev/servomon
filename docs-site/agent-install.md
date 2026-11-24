@@ -27,6 +27,8 @@ The POSIX shell installer:
 
 Keep the terminal open until approval and installation finish. Pairing requests expire after 15 minutes. The fingerprint is a comparison label, not proof of private-key ownership. Enrollment writes `AGENT_ID` and `AGENT_TOKEN` into `.env`; protect it and `.servomon-identity.json` as secrets.
 
+**Docker access:** if `/var/run/docker.sock` exists and the service user is not in its group, the installer adds `SupplementaryGroups=<socket group>` (usually `docker`) to the unit so the agent can report containers, and prints a notice. Docker socket access is root-equivalent on the host. Pass **`--no-docker-access`** to skip it; host metrics still work. Hosts without Docker are unaffected. Agent logs are JSON lines; set `LOG_LEVEL=debug` in `.env` for debug mode (see [troubleshooting](/troubleshooting)).
+
 ## Docker Desktop for Linux
 
 Run the installer as your normal desktop user so the service can access your own Desktop socket. Engine discovery uses this order:

@@ -1,10 +1,11 @@
 #!/bin/sh
-# Install or upgrade the Linux agent; --ca-cert FILE trusts a private server CA.
+# Install or upgrade the Linux agent; --ca-cert FILE trusts a private server CA;
+# --no-docker-access skips granting the service the Docker socket's group.
 set -eu
 
 fail() { printf 'servomon: %s\n' "$*" >&2; exit 1; }
-usage() { printf '%s\n' 'Usage: install.sh --server URL [--name NAME] [--version vX.Y.Z] [--ca-cert FILE] | --uninstall'; }
-server='' name='' version=latest uninstall=false ca_cert=''
+usage() { printf '%s\n' 'Usage: install.sh --server URL [--name NAME] [--version vX.Y.Z] [--ca-cert FILE] [--no-docker-access] | --uninstall'; }
+server='' name='' version=latest uninstall=false ca_cert='' docker_access=true
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --server|--name|--version|--ca-cert)
@@ -13,6 +14,7 @@ while [ "$#" -gt 0 ]; do
       case "$flag" in --server) server=$1;; --name) name=$1;; --version) version=$1;; --ca-cert) ca_cert=$1;; esac
       ;;
     --uninstall) uninstall=true;;
+    --no-docker-access) docker_access=false;;
     --help|-h) usage; exit 0;;
     *) usage >&2; fail "Unknown option: $1";;
   esac
@@ -107,6 +109,38 @@ if ! privileged test -f "$install_dir/.env"; then
 else
   printf '%s\n' 'Keeping existing .env and identity (including server URL and name).'
 fi
+# Rootful Docker gates its socket by group; grant that group to the unit only
+# when the service user lacks it, and only for a real, non-root group (systemd
+# refuses to start a unit naming an unknown group).
+docker_socket=/var/run/docker.sock
+docker_groups=''
+if [ -S "$docker_socket" ]; then
+  socket_owner=$(stat -c %U "$docker_socket")
+  socket_gid=$(stat -c %g "$docker_socket")
+  socket_group=$(stat -c %G "$docker_socket")
+  case " $(id -G "$service_user") " in
+    *" $socket_gid "*) docker_has_access=true;;
+    *) if [ "$socket_owner" = "$service_user" ]; then docker_has_access=true; else docker_has_access=false; fi;;
+  esac
+  if [ "$docker_has_access" = true ]; then
+    :
+  elif [ "$docker_access" = false ]; then
+    printf '%s\n' "Not granting Docker socket access (--no-docker-access); containers on $docker_socket will not be reported." >&2
+  elif [ "$socket_gid" -eq 0 ] || ! getent group "$socket_group" >/dev/null 2>&1; then
+    printf '%s\n' "Docker socket $docker_socket is owned by $socket_owner:$socket_group; not granting it automatically. Containers will not be reported until $service_user can access it." >&2
+  else
+    case "$socket_group" in
+      *[!A-Za-z0-9._-]*) printf '%s\n' "Docker socket group '$socket_group' has an unsupported name; not granting it automatically." >&2;;
+      *)
+        docker_groups="SupplementaryGroups=$socket_group"
+        printf '%s\n' \
+          "NOTICE: granting servomon-agent the '$socket_group' group so it can read $docker_socket." \
+          'Docker socket access is root-equivalent on this host: whoever controls the agent process can control the host.' \
+          'Re-run the installer with --no-docker-access to opt out.' >&2
+        ;;
+    esac
+  fi
+fi
 cat >"$tmp/service" <<EOF
 [Unit]
 Description=Servomon monitoring agent
@@ -118,6 +152,7 @@ Type=simple
 User=$service_user
 Environment=HOME=$service_home
 $ca_environment
+$docker_groups
 WorkingDirectory=/opt/servomon-agent
 ExecStart=/opt/servomon-agent/servomon-agent
 Restart=always

@@ -113,3 +113,24 @@ export function formatPercent(n: number | null | undefined, digits = 0): string 
   if (n == null || !Number.isFinite(n)) return "—";
   return `${n.toFixed(digits)}%`;
 }
+
+const UPTIME_UNITS = [
+  ["day", 86_400],
+  ["hour", 3_600],
+  ["minute", 60],
+] as const;
+
+// Seconds since boot -> "3 days, 4 hours" / "42 minutes": the two most
+// significant non-zero units, floored. "—" when the agent didn't report it.
+export function formatUptime(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "—";
+  if (seconds < 60) return "under a minute";
+  let rest = Math.floor(seconds);
+  const parts: string[] = [];
+  for (const [unit, size] of UPTIME_UNITS) {
+    const count = Math.floor(rest / size);
+    rest %= size;
+    if (count > 0) parts.push(`${count} ${unit}${count === 1 ? "" : "s"}`);
+  }
+  return parts.slice(0, 2).join(", ");
+}

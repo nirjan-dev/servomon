@@ -7,6 +7,8 @@ Wants=network-online.target
 Type=simple
 User=username
 Environment=HOME=/home/username
+# Grants rootful Docker socket access (root-equivalent); use the socket's group from `stat -c %G /var/run/docker.sock`.
+# SupplementaryGroups=docker
 WorkingDirectory=/opt/servomon-agent
 ExecStart=/opt/servomon-agent/servomon-agent
 Restart=always

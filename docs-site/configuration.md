@@ -36,8 +36,9 @@ sudo systemctl restart servomon-agent
 | `NAME` | Sanitized hostname | System name, using `A–Z`, `a–z`, `0–9`, `.`, `_`, `-`; server names must be 1–64 characters and start with a letter or digit. Must be unique in your instance. |
 | `SEND_REQUESTS` | `true` | Only the literal string `false` disables metrics submission. |
 | `REQUESTS_PER_MINUTE_UNIT` | `20` | Number of requests per `MINUTE_UNIT` minutes. |
-| `MINUTE_UNIT` | `2` | Interval is `MINUTE_UNIT × 60 / REQUESTS_PER_MINUTE_UNIT` seconds: **6 seconds** by default. |
+| `MINUTE_UNIT` | `2` | Interval is `MINUTE_UNIT × 60 / REQUESTS_PER_MINUTE_UNIT` seconds: **6 seconds** by default. Each push times out after 10 seconds; the next push starts one interval after the previous one finishes, on a fresh connection after a failure. |
 | `PORT` | `8282` | Local debug metrics HTTP endpoint, bound only to `127.0.0.1`; no inbound port needs opening. |
+| `LOG_LEVEL` | `info` | `error`, `warn`, `info` or `debug`. Logs are one JSON object per line (journald under systemd). `info` logs startup, connection changes and push failure/recovery; `debug` is debug mode, adding per-push timing, WebSocket command traces and Docker probing. |
 | `AGENT_TOKEN` | Written by enrollment | Secret bearer token. Empty/absent triggers enrollment; a revoked nonempty token does not automatically re-enroll. |
 | `AGENT_ID` | Written by enrollment | Agent identifier saved alongside the token. |
 | `DOCKER_SOCKET` | Optional | Explicit Unix socket path, taking precedence over all other engine discovery. |

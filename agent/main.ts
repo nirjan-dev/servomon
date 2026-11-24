@@ -1,6 +1,8 @@
 import { CommandResponderWebsocketClient } from "./lib/CommandResponderWebsocketClient.ts";
 import { enrollAgent } from "./lib/enroll.ts";
-import { resolveDockerSocket } from "./lib/dockerSocket.ts";
+import { probeDockerSocket, resolveDockerSocket } from "./lib/dockerSocket.ts";
+import { startMetricsPusher } from "./lib/metricsPusher.ts";
+import { configureLogging, log } from "../shared/lib/log.ts";
 import "@std/dotenv/load";
 import type {
   Metrics,
@@ -17,6 +19,9 @@ import denoJSON from "./deno.json" with { type: "json" };
 
 const version = denoJSON.version;
 
+const PUSH_TIMEOUT_MS = 10_000;
+const TICKET_TIMEOUT_MS = 10_000;
+
 if (Deno.args.length === 1 && Deno.args[0] === "--version") {
   console.log(version);
   Deno.exit(0);
@@ -25,6 +30,10 @@ const enrollOnly = Deno.args.length === 1 && Deno.args[0] === "enroll";
 if (Deno.args.length && !enrollOnly) {
   console.error("Usage: servomon-agent [enroll | --version]");
   Deno.exit(1);
+}
+const LOG_LEVEL = Deno.env.get("LOG_LEVEL");
+if (!configureLogging(LOG_LEVEL)) {
+  log.warn("invalid LOG_LEVEL; using info", { value: LOG_LEVEL, allowed: ["error", "warn", "info", "debug"] });
 }
 const SEND_REQUESTS = Deno.env.get("SEND_REQUESTS") !== "false";
 const SERVER_URL = Deno.env.get("SERVER_URL");
@@ -43,7 +52,7 @@ if (!SERVER_URL) {
 }
 if (!AGENT_TOKEN) {
   // S1: first run — enroll with the operator's approval, then continue.
-  console.log("No AGENT_TOKEN set; starting enrollment…");
+  log.info("no AGENT_TOKEN set; starting enrollment");
   const enrolled = await enrollAgent(SERVER_URL, NAME, Deno.cwd());
   Deno.env.set("AGENT_TOKEN", enrolled.token);
   AGENT_TOKEN = enrolled.token;
@@ -52,12 +61,21 @@ if (enrollOnly) Deno.exit(0);
 
 const dockerSocket = await resolveDockerSocket();
 Deno.env.set("DOCKER_SOCKET", dockerSocket);
-console.log(`Docker socket: ${dockerSocket}`);
+const dockerAccess = await probeDockerSocket(dockerSocket);
+if (dockerAccess === "denied") {
+  log.warn("docker socket not accessible; containers will not be reported", {
+    socket: dockerSocket,
+    user: Deno.env.get("USER") ?? Deno.uid(),
+    hint: "add the agent's service user to the socket's group, e.g. `sudo systemctl edit servomon-agent` with [Service] SupplementaryGroups=docker, then restart",
+  });
+} else {
+  log.debug("docker socket probed", { socket: dockerSocket, access: dockerAccess });
+}
 // Dynamic import guarantees systeminformation reads the resolved socket at
 // evaluation time; static import ordering would run it before this assignment.
 const {
   battery, currentLoad, dockerContainers, dockerContainerStats, fsSize, get,
-  mem, networkInterfaceDefault, networkStats, processes, processLoad,
+  mem, networkInterfaceDefault, networkStats, processes, processLoad, time,
 } = await import("systeminformation");
 
 const requestIntervalMilliSeconds = getRequestIntervalMilliSeconds(
@@ -73,19 +91,18 @@ function getRequestIntervalMilliSeconds(
   return totalMilliSeconds / requestsPerMinuteUnit;
 }
 
-console.log("Current Servomon agent version", version);
-console.log("Current Deno version", Deno.version.deno);
-console.log("Current TypeScript version", Deno.version.typescript);
-console.log("Current V8 version", Deno.version.v8);
-
-console.log(`REQUEST interval: ${requestIntervalMilliSeconds}`);
-console.log(
-  `will send ${REQUESTS_PER_MINUTE_UNIT} requests every ${MINUTE_UNIT} minutes`,
-);
-console.log(`SEND_REQUESTS: ${SEND_REQUESTS}`);
-console.log(`SERVER_URL: ${SERVER_URL}`);
-console.log(`PORT: ${PORT}`);
-console.log(`NAME: ${NAME}`)
+log.info("agent started", {
+  version,
+  deno: Deno.version.deno,
+  name: NAME,
+  serverUrl: SERVER_URL,
+  sendRequests: SEND_REQUESTS,
+  pushIntervalMs: requestIntervalMilliSeconds,
+  pushTimeoutMs: PUSH_TIMEOUT_MS,
+  localPort: PORT,
+  dockerSocket,
+  dockerAccess,
+});
 
 async function getMemoryStats(): Promise<MemoryInfo> {
   const { total, available, active } = await mem();
@@ -120,7 +137,8 @@ async function getSystemInfo():Promise<SystemInfo> {
   const combinedSystemInfo:SystemInfo = {
     os: `${osInfo?.platform} ${osInfo?.distro} ${osInfo?.release}`,
     kernel: osInfo?.kernel,
-    device: system?.version || system?.model || system?.manufacturer
+    device: system?.version || system?.model || system?.manufacturer,
+    uptime: Math.floor(time().uptime),
   }
   return combinedSystemInfo
 }
@@ -304,36 +322,15 @@ async function getNetworkStats(): Promise<NetworkInfo> {
   return formattedNetworkStats;
 }
 
-// setup a timer to update the metrics every 5 seconds and send them to the web server
-
-setInterval(async () => {
-  if (!SEND_REQUESTS) {
-    return;
-  }
-
-  if (!SERVER_URL) {
-    throw new Error("No server URL provided");
-  }
-
-  const metrics = await getMetrics();
-  try {
-    const response = await fetch(`${SERVER_URL}/api/metrics`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${AGENT_TOKEN}`,
-      },
-      body: JSON.stringify(metrics),
-    });
-    const parsedResponse = await response.json();
-    if (parsedResponse?.statusCode !== 201) {
-      throw new Error(`Error sending metrics ` + parsedResponse?.statusMessage + JSON.stringify(parsedResponse?.data, null, 2));
-    }
-  } catch (error:unknown) {
-    console.log(error)
-    console.log('tried sending: ', JSON.stringify(metrics, null, 2))
-  }
-}, requestIntervalMilliSeconds);
+if (SEND_REQUESTS) {
+  startMetricsPusher({
+    url: `${SERVER_URL}/api/metrics`,
+    token: AGENT_TOKEN,
+    intervalMs: requestIntervalMilliSeconds,
+    timeoutMs: PUSH_TIMEOUT_MS,
+    collect: getMetrics,
+  });
+}
 
 // start a local web server with a handler
 async function handler(_req: Request): Promise<Response> {
@@ -353,8 +350,10 @@ const ws = new CommandResponderWebsocketClient({
     const ticketRes = await fetch(`${SERVER_URL}/api/ws-ticket`, {
       method: "POST",
       headers: { Authorization: `Bearer ${AGENT_TOKEN}` },
+      signal: AbortSignal.timeout(TICKET_TIMEOUT_MS),
     });
     if (!ticketRes.ok) {
+      await ticketRes.body?.cancel();
       throw new Error(`WS ticket mint failed with HTTP ${ticketRes.status}`);
     }
     const { ticket } = (await ticketRes.json()) as { ticket: string };
@@ -369,4 +368,8 @@ const ws = new CommandResponderWebsocketClient({
 
 await ws.connect();
 
-Deno.serve({ hostname: "127.0.0.1", port: PORT }, handler);
+Deno.serve({
+  hostname: "127.0.0.1",
+  port: PORT,
+  onListen: ({ hostname, port }) => log.debug("local metrics endpoint listening", { url: `http://${hostname}:${port}/` }),
+}, handler);

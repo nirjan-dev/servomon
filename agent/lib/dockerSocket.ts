@@ -29,6 +29,22 @@ export async function resolveDockerSocket(): Promise<string> {
   return "/var/run/docker.sock";
 }
 
+export type DockerSocketAccess = "ok" | "missing" | "denied";
+
+// systeminformation turns engine errors into an empty container list, so an
+// unreadable socket looks exactly like a host without containers. Probe it.
+export async function probeDockerSocket(path: string): Promise<DockerSocketAccess> {
+  try {
+    const conn = await Deno.connect({ transport: "unix", path });
+    conn.close();
+    return "ok";
+  } catch (error) {
+    if (error instanceof Deno.errors.PermissionDenied) return "denied";
+    if (error instanceof Deno.errors.NotFound || error instanceof Deno.errors.ConnectionRefused) return "missing";
+    throw error;
+  }
+}
+
 export function dockerCommandEnvironment(): Record<string, string> {
   const socket = Deno.env.get("DOCKER_SOCKET");
   if (!socket) throw new Error("Docker socket has not been initialized");

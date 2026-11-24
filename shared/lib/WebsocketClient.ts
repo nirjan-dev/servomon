@@ -1,3 +1,5 @@
+import { log } from "./log.ts";
+
 export type WebsocketCallbacks = {
   onMessage?: (data: string) => void;
   onConnect?: () => void;
@@ -18,10 +20,12 @@ export class WebsocketClient {
   private url: string;
   private resolveUrl?: () => string | Promise<string>;
   private isConnected: boolean = false;
+  // An agent must keep trying for as long as it runs; outages can outlast any fixed budget.
+  private maxReconnectAttempts: number = Infinity;
   private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number = 20;
   private reconnectInterval: number = 1000;
   private reconnectTimeout?: ReturnType<typeof setTimeout>;
+  private lastError: unknown;
   private callbacks: WebsocketCallbacks = {};
 
   constructor(config: WebsocketClientConfig) {
@@ -52,7 +56,9 @@ export class WebsocketClient {
       this.ws = new WebSocket(url);
       this.setupEventListeners();
     } catch (error) {
-      console.error("failed to create websocket connection: ", error);
+      // Warn once per outage; retries during the same outage are debug noise.
+      if (this.reconnectAttempts === 0) log.warn("websocket connect failed", { error });
+      else log.debug("websocket connect failed", { error, attempt: this.reconnectAttempts });
       this.handleReconnect();
     }
   }
@@ -62,20 +68,24 @@ export class WebsocketClient {
 
     this.ws.onopen = () => {
       this.isConnected = true;
+      log.info("websocket connected", { reconnectAttempts: this.reconnectAttempts });
       this.reconnectAttempts = 0;
-      console.log("Websocket connected");
       if (this.callbacks.onConnect) this.callbacks.onConnect();
     };
 
     this.ws.onclose = (event) => {
       this.isConnected = false;
-      console.log(`Websocket closed: ${event.code} ${event.reason}`);
+      // onerror fires first with no useful detail of its own; report both as one event.
+      const fields = { code: event.code, reason: event.reason || undefined, error: this.lastError };
+      this.lastError = undefined;
+      if (event.code === 1000) log.info("websocket closed", fields);
+      else log.warn("websocket closed", fields);
       this.handleReconnect();
       if (this.callbacks.onDisconnect) this.callbacks.onDisconnect();
     };
 
     this.ws.onerror = (error) => {
-      console.log(`Websocket error: ${error}`);
+      this.lastError = error;
       // NOTE: no need to call handle reconnect because onclose will be called after onerror
       if (this.callbacks.onError) this.callbacks.onError();
     };
@@ -95,10 +105,7 @@ export class WebsocketClient {
     }
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(
-        `Failed to reconnect after ${this.maxReconnectAttempts} attempts`
-      );
-      this.emit("maxReconnectAttemptsReached");
+      log.error("websocket reconnect attempts exhausted", { attempts: this.maxReconnectAttempts });
       return;
     }
 
@@ -107,11 +114,10 @@ export class WebsocketClient {
       60000 // max delay of 1min
     );
 
-    console.log(
-      `attempting to reconnect in ${backoffDelay}ms... (attempt ${
-        this.reconnectAttempts + 1
-      })`
-    );
+    log.debug("websocket reconnect scheduled", {
+      delayMs: backoffDelay,
+      attempt: this.reconnectAttempts + 1,
+    });
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectAttempts++;
@@ -145,15 +151,8 @@ export class WebsocketClient {
     this.reconnectAttempts = 0;
   }
 
-  // Add an event emitter to notify subscribers of connection events
-  private emit(event: string, data?: unknown): void {
-    // We'll implement a proper event system later
-    // For now, just console.log
-    console.log(`Event: ${event}`, data);
-  }
-
   protected handleMessage(data: unknown): void {
-    console.log(`Received message: ${data}`);
+    log.debug("websocket message received", { bytes: typeof data === "string" ? data.length : undefined });
   }
 
   public send(data: string): void {
